@@ -1,0 +1,26 @@
+# Local secrets
+.env
+.env.local
+.env.*.local
+*.pem
+
+# Dependencies and build output
+node_modules/
+.pnpm-store/
+.next/
+.turbo/
+.trigger/
+supabase/.temp/
+.output/
+.wxt/
+dist/
+build/
+out/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# Local tooling
+.DS_Store
+coverage/
+.vercel
