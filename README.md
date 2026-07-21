@@ -201,9 +201,6 @@ Release artifacts are generated at:
 - Unpacked extension: `apps/extension/.output/chrome-mv3`
 - Chrome ZIP: `apps/extension/.output/comic-codeextension-0.1.0-chrome.zip`
 
-## Hackathon submission
-
-Use [docs/DEVPOST_SUBMISSION_CHECKLIST.md](./docs/DEVPOST_SUBMISSION_CHECKLIST.md). The final Devpost entry still needs the hosted URL, repository URL, a public voiceover demo under three minutes, and the Codex `/feedback` session ID.
 
 ## License
 
