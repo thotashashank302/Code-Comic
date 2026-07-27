@@ -3,57 +3,85 @@ import type { PersistedEvidenceLocator } from '@comic-code/contracts'
 export type RepositoryCoordinate = {
   owner: string
   repository: string
-  pullRequestNumber: number
+  ref?: string
 }
 
-export function parseGitHubPullRequestUrl(
+const reservedGitHubSections = new Set([
+  'about',
+  'account',
+  'apps',
+  'codespaces',
+  'collections',
+  'enterprise',
+  'explore',
+  'features',
+  'issues',
+  'login',
+  'marketplace',
+  'new',
+  'notifications',
+  'orgs',
+  'pricing',
+  'pulls',
+  'search',
+  'security',
+  'settings',
+  'signup',
+  'sponsors',
+  'topics',
+])
+
+export function parseGitHubRepositoryUrl(
   value: string,
 ): RepositoryCoordinate | null {
   try {
     const url = new URL(value)
     if (url.protocol !== 'https:' || url.hostname !== 'github.com') return null
-    const match = url.pathname.match(/^\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/|$)/)
-    if (!match) return null
-    const pullRequestNumber = Number(match[3])
-    if (!Number.isSafeInteger(pullRequestNumber) || pullRequestNumber < 1) {
-      return null
-    }
+    const segments = url.pathname
+      .split('/')
+      .filter(Boolean)
+      .map((segment) => decodeURIComponent(segment))
+    if (segments.length < 2) return null
+
+    const owner = segments[0]!
+    const repository = segments[1]!.replace(/\.git$/i, '')
+    if (!owner || !repository || reservedGitHubSections.has(owner)) return null
+
+    if (segments.length === 2) return { owner, repository }
+    if (segments[2] !== 'tree' || segments.length < 4) return null
+
     return {
-      owner: decodeURIComponent(match[1]!),
-      repository: decodeURIComponent(match[2]!),
-      pullRequestNumber,
+      owner,
+      repository,
+      ref: segments[3],
     }
   } catch {
     return null
   }
 }
 
-export type PullRequestSnapshot = RepositoryCoordinate & {
-  title: string
+export type RepositorySnapshot = {
+  owner: string
+  repository: string
   description: string
-  baseSha: string
-  headSha: string
+  defaultBranch: string
+  resolvedRef: string
+  commitSha: string
+  treeSha: string
   isPrivate: boolean
   htmlUrl: string
 }
 
-export type ChangedFileStatus = 'added' | 'modified' | 'removed' | 'renamed'
-
-export type ChangedFile = {
+export type RepositoryTreeFile = {
   path: string
-  previousPath?: string
-  status: ChangedFileStatus
-  additions: number
-  deletions: number
-  changes: number
-  blobSha: string | null
-  patch?: string
+  sha: string
+  size: number
 }
 
-export type PreparedFile = ChangedFile & {
-  patch: string
-  maskedPatch: string
-  maskedSource?: string
+export type ChangedFileStatus = 'added' | 'modified' | 'removed' | 'renamed'
+
+export type PreparedRepositoryFile = RepositoryTreeFile & {
+  maskedSource: string
 }
 
 export type TransientEvidence = {
@@ -61,12 +89,13 @@ export type TransientEvidence = {
   maskedText: string
 }
 
-export type PreparedPullRequest = {
-  snapshot: PullRequestSnapshot
-  maskedTitle: string
+export type PreparedRepository = {
+  snapshot: RepositorySnapshot
   maskedDescription: string
   evidence: TransientEvidence[]
   excludedFiles: string[]
+  excludedFileCount: number
   selectedFiles: string[]
-  changedLines: number
+  totalTreeFiles: number
+  scannedCharacters: number
 }

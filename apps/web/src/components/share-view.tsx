@@ -10,7 +10,7 @@ import { Storyboard } from '@/components/storyboard'
 
 type SharedExplanation = {
   repository: string
-  pullRequestNumber: number
+  ref: string
   analysis: ComicAnalysis | null
   artifactUrl: string | null
   expiresAt: string
@@ -89,10 +89,11 @@ export function ShareView({ shareId }: ShareViewProps) {
           <div className="shared-story__intro">
             <span className="eyebrow">Shared visual explanation</span>
             <h1>
-              {explanation.repository} · PR #{explanation.pullRequestNumber}
+              {explanation.repository} · {explanation.ref}
             </h1>
             <p>
-              This link expires automatically and never exposes the source diff.
+              This link expires automatically and never exposes repository
+              source.
             </p>
           </div>
           <Storyboard

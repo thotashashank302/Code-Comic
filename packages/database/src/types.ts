@@ -5,10 +5,14 @@ export type ExplanationRow = {
   owner_user_id: string
   github_owner: string
   github_repository: string
-  pull_request_number: number
+  source_mode: 'repository' | 'pull_request'
+  repository_ref: string
+  commit_sha: string
+  scan_summary: Record<string, unknown>
+  pull_request_number: number | null
   is_private: boolean
-  base_sha: string
-  head_sha: string
+  base_sha: string | null
+  head_sha: string | null
   status: ExplanationStatus
   progress_percent: number
   progress_message: string

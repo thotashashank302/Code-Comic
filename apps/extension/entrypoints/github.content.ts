@@ -1,19 +1,41 @@
-const pullRequestPath = /^\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/|$)/
+const reservedRepositorySections = new Set([
+  'about',
+  'account',
+  'apps',
+  'codespaces',
+  'collections',
+  'contact',
+  'customer-stories',
+  'enterprise',
+  'events',
+  'explore',
+  'features',
+  'issues',
+  'login',
+  'marketplace',
+  'new',
+  'notifications',
+  'orgs',
+  'pricing',
+  'pulls',
+  'search',
+  'security',
+  'settings',
+  'signup',
+  'sponsors',
+  'topics',
+])
 
 function readCoordinate() {
-  const match = window.location.pathname.match(pullRequestPath)
-  if (!match) return null
-
-  const pullRequestNumber = Number(match[3])
-  if (!Number.isSafeInteger(pullRequestNumber) || pullRequestNumber < 1) {
+  const segments = window.location.pathname.split('/').filter(Boolean)
+  if (segments.length < 2 || reservedRepositorySections.has(segments[0]!)) {
     return null
   }
+  const owner = decodeURIComponent(segments[0]!)
+  const repository = decodeURIComponent(segments[1]!).replace(/\.git$/i, '')
+  if (!owner || !repository) return null
 
-  return {
-    owner: match[1]!,
-    repository: match[2]!,
-    pullRequestNumber,
-  }
+  return { owner, repository }
 }
 
 function mountExplainButton() {
@@ -26,14 +48,13 @@ function mountExplainButton() {
     existing?.remove()
     return
   }
-
   if (existing) return
 
   const button = document.createElement('button')
   button.type = 'button'
   button.dataset.comicCodeTrigger = 'true'
   button.className = 'Button--primary Button--medium Button'
-  button.textContent = 'Explain PR'
+  button.textContent = 'Explain Repository'
   button.addEventListener('click', () => {
     void chrome.runtime.sendMessage({
       type: 'comic-code:open-sidepanel',
@@ -42,10 +63,9 @@ function mountExplainButton() {
   })
 
   const target =
-    document.querySelector('.gh-header-actions') ??
-    document.querySelector('[data-testid="pull-request-header"]') ??
+    document.querySelector('[data-testid="repository-overview"]') ??
+    document.querySelector('.file-navigation') ??
     document.querySelector('main')
-
   target?.prepend(button)
 }
 
@@ -54,15 +74,22 @@ export default defineContentScript({
   runAt: 'document_idle',
   main() {
     let currentHref = window.location.href
-    mountExplainButton()
-
-    const observer = new MutationObserver(() => {
+    let scheduled = false
+    const refresh = () => {
+      scheduled = false
       if (window.location.href !== currentHref) {
         currentHref = window.location.href
+        document.querySelector('[data-comic-code-trigger]')?.remove()
       }
       mountExplainButton()
+    }
+    const observer = new MutationObserver(() => {
+      if (scheduled) return
+      scheduled = true
+      window.requestAnimationFrame(refresh)
     })
 
+    refresh()
     observer.observe(document.documentElement, {
       childList: true,
       subtree: true,

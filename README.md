@@ -1,19 +1,19 @@
 # Comic Code
 
-Comic Code reads selected source files from a GitHub pull request and turns how the code works into a grounded four-panel comic. It includes a Chrome side-panel extension, a hosted Next.js demo, private Supabase storage, durable Trigger.dev jobs, and optional user-funded Cloudflare AI generation.
+Comic Code maps an entire GitHub repository, selects representative architecture files, and turns what the system does into a grounded four-panel comic for people who do not code. It includes a Chrome side-panel extension, a hosted Next.js demo, private Supabase storage, durable Trigger.dev jobs, and optional user-funded Cloudflare AI generation.
 
 Built for the OpenAI Build Week hackathon in the **Work & Productivity** category.
 
 ## What works
 
-- Public and private GitHub pull requests.
-- Native Chrome 114+ side panel with an injected **Explain PR** button.
+- Public and private GitHub repositories.
+- Native Chrome 114+ side panel with an injected **Explain Repository** button.
 - GitHub App OAuth with state + PKCE and encrypted seven-hour sessions.
 - Read-only repository access; private repositories require a GitHub App installation.
 - Safe public-repository fallback without requiring an installation.
-- File selection with a maximum of 20 files and 3,000 changed lines.
+- Recursive repository-tree scan capped at 5,000 entries, with up to 40 representative files selected across major directories.
 - Sensitive-file exclusion, secret masking, and high-entropy token detection.
-- Full selected-file reading at the PR head, with diff locations used only to prioritize bounded source sampling.
+- Immutable commit capture, architecture-aware file ranking, and a 150,000-character source evidence budget.
 - API-free structural scan that detects languages, control flow, validation, async work, data access, UI state, security checks, and tests.
 - Optional Cloudflare BYOK pipeline: Llama analyzes and verifies transient code context, then FLUX creates four distinct panels using the user's own Workers AI allocation; creator credits are never used as a hidden fallback.
 - Bundled visual-template fallback when artwork credentials or quota are unavailable.
@@ -39,9 +39,9 @@ Raw source, reconstructed patches, and prompts containing source exist only in a
 
 Cloudflare BYOK Account IDs and API tokens are accepted only by the authenticated code-analysis/artwork route over HTTPS. They remain in webpage tab memory or Chrome extension local storage, are never placed in Trigger.dev payloads, and are never persisted by Comic Code servers, databases, logs, or audit records. Masked selected code context is sent transiently to Cloudflare for Llama analysis and claim verification; FLUX then generates four images. The user's Cloudflare account pays for both text and image inference.
 
-The worker receives only an explanation UUID. It fetches selected files at the PR head, masks secrets, creates an API-free preview, and persists only sanitized claims, captions, evidence locators/hashes, and generated artwork. If a user supplies Cloudflare credentials, the authenticated web route refetches the same bounded source and sends it transiently to that user's Workers AI account.
+The worker receives only an explanation UUID. It scans the captured repository commit, reads representative files, masks secrets, creates an API-free preview, and persists only sanitized claims, captions, evidence locators/hashes, scan metadata, and generated artwork. If a user supplies Cloudflare credentials, the authenticated web route refetches the same bounded repository evidence and sends it transiently to that user's Workers AI account.
 
-See [SECURITY.md](./SECURITY.md) and [PR_EXPLAINER_IMPLEMENTATION_PLAN.md](./PR_EXPLAINER_IMPLEMENTATION_PLAN.md) for the threat model and acceptance criteria.
+See [SECURITY.md](./SECURITY.md) for the threat model and residual considerations.
 
 ## Prerequisites
 
@@ -102,7 +102,7 @@ Create a GitHub App with:
 - User authorization enabled
 - Expiring user access tokens enabled
 
-Public PRs work without installing the app on that repository. Private PRs require the user to install the app on the selected repository and still revalidate the signed-in user’s access.
+Public repositories work without installing the app. Private repositories require the user to install the app on that repository and still revalidate the signed-in user’s access.
 
 ## Supabase setup
 
@@ -121,14 +121,14 @@ Do not paste the migration into the SQL editor manually. The application intenti
 From `apps/web`:
 
 ```bash
-pnpm exec trigger.dev login
-pnpm exec trigger.dev dev
+pnpm exec trigger login
+pnpm exec trigger dev
 ```
 
 After the task appears in the dashboard, sync only the worker variables listed above. Deploy the task with:
 
 ```bash
-pnpm exec trigger.dev deploy
+pnpm exec trigger deploy
 ```
 
 The task payload is `{ explanationId }`; it never includes source, patches, prompts, GitHub tokens, or captions.
@@ -176,14 +176,14 @@ pnpm --filter @comic-code/extension zip
 Current local verification:
 
 - Production dependency audit: no known vulnerabilities.
-- 23 unit/security/composition tests passing.
+- 25 unit/security/scanning/composition tests passing.
 - TypeScript passing across all workspaces.
 - ESLint passing with zero warnings.
 - Next.js production build passing for every page and API route.
 - WXT Chrome MV3 build and ZIP passing.
 - Browser checks passing at 1280 px and 390 px with no runtime errors or horizontal overflow.
 
-Live integration tests require real service credentials and a test PR; they cannot be meaningfully mocked as proof of deployment readiness.
+Live integration tests require real service credentials and test repositories; they cannot be meaningfully mocked as proof of deployment readiness.
 
 ## Deployment
 
@@ -200,7 +200,6 @@ Release artifacts are generated at:
 
 - Unpacked extension: `apps/extension/.output/chrome-mv3`
 - Chrome ZIP: `apps/extension/.output/comic-codeextension-0.1.0-chrome.zip`
-
 
 ## License
 

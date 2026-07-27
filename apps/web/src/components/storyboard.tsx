@@ -32,8 +32,8 @@ export function Storyboard({ analysis, artifactUrl }: StoryboardProps) {
               : 'Local structural preview'}
           </strong>
           <p>
-            This preview scans selected source files at the PR head and explains
-            their detected structure without an OpenAI API call.{' '}
+            This preview scans representative files at one repository commit and
+            explains their detected structure without an OpenAI API call.{' '}
             {hasUserArtwork
               ? 'Panel images were generated using your Cloudflare credentials.'
               : 'Artwork uses bundled visual templates.'}{' '}

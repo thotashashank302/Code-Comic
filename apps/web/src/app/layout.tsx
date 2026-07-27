@@ -6,7 +6,7 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'Comic Code',
   description:
-    'Turn selected source code in a GitHub pull request into a grounded visual story.',
+    'Turn an entire GitHub repository into a grounded visual story anyone can understand.',
   robots: { index: true, follow: true },
 }
 

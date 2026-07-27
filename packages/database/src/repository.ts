@@ -16,9 +16,11 @@ export async function createExplanation(
   input: {
     userId: string
     request: CreateExplanationRequest
-    baseSha: string
+    commitSha: string
+    resolvedRef: string
     isPrivate: boolean
     idempotencyKey: string
+    scanSummary?: Record<string, unknown>
   },
 ) {
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1_000)
@@ -29,11 +31,15 @@ export async function createExplanation(
         owner_user_id: input.userId,
         github_owner: input.request.owner,
         github_repository: input.request.repository,
-        pull_request_number: input.request.pullRequestNumber,
+        source_mode: 'repository',
+        repository_ref: input.resolvedRef,
+        commit_sha: input.commitSha,
+        scan_summary: input.scanSummary ?? {},
+        pull_request_number: null,
         is_private: input.isPrivate,
-        base_sha: input.baseSha,
-        head_sha: input.request.headSha,
-        selected_files: input.request.selectedFiles ?? [],
+        base_sha: null,
+        head_sha: null,
+        selected_files: [],
         status: 'queued',
         progress_percent: 0,
         progress_message: 'Queued for generation',
@@ -223,6 +229,31 @@ export async function saveExplanationAnalysis(
   throwIfError(error)
   if (!data)
     throw new Error('Explanation was deleted before artwork generation')
+}
+
+export async function saveRepositoryScan(
+  client: SupabaseClient,
+  input: {
+    explanationId: string
+    selectedFiles: string[]
+    excludedFiles: string[]
+    scanSummary: Record<string, string | number | boolean>
+  },
+) {
+  const { data, error } = await client
+    .from('explanations')
+    .update({
+      selected_files: input.selectedFiles,
+      excluded_files: input.excludedFiles,
+      scan_summary: input.scanSummary,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.explanationId)
+    .is('deleted_at', null)
+    .select('id')
+    .maybeSingle()
+  throwIfError(error)
+  if (!data) throw new Error('Explanation was deleted during repository scan')
 }
 
 export async function tombstoneExplanation(

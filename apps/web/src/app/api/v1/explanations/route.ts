@@ -1,17 +1,24 @@
 import { idempotencyKeys, tasks } from '@trigger.dev/sdk'
 
+import {
+  createDeterministicComicAnalysis,
+  createSafetyIdentifier,
+} from '@comic-code/comic'
 import { createExplanationRequestSchema } from '@comic-code/contracts'
 import {
   countRecentExplanations,
   createExplanation,
   getExplanationByIdempotencyKey,
   recordAuditEvent,
+  saveExplanationAnalysis,
+  saveRepositoryScan,
   setExplanationTriggerRun,
 } from '@comic-code/database'
-import { githubRequestStatus, selectEligibleFiles } from '@comic-code/github'
+import { githubRequestStatus, prepareRepository } from '@comic-code/github'
 
 import type { generateComicTask } from '@/trigger/generate-comic'
 import { requireRequestSession } from '@/lib/auth/session'
+import { getServerEnv } from '@/lib/env'
 import {
   assertSameOrigin,
   HttpError,
@@ -39,62 +46,28 @@ export async function POST(request: Request) {
       parsedRequest.repository,
     )
     const allowPublicFallback = !access.isPrivate
-    const coordinate = {
-      owner: parsedRequest.owner,
-      repository: parsedRequest.repository,
-      pullRequestNumber: parsedRequest.pullRequestNumber,
-    }
-    const [snapshot, changedFiles] = await Promise.all([
-      github.getPullRequestSnapshot(
-        coordinate,
+    const snapshot = await github
+      .getRepositorySnapshot(
+        parsedRequest,
         allowPublicFallback,
         session.accessToken,
-      ),
-      github.listChangedFiles(
-        coordinate,
-        allowPublicFallback,
-        session.accessToken,
-      ),
-    ]).catch((error: unknown) => {
-      if (access.isPrivate) {
-        throw new HttpError(403, 'github_app_installation_required')
-      }
-      throw error
-    })
-    if (
-      snapshot.headSha.toLowerCase() !== parsedRequest.headSha.toLowerCase()
-    ) {
-      throw new HttpError(409, 'pull_request_changed')
-    }
-
-    const selection = selectEligibleFiles(
-      changedFiles,
-      parsedRequest.selectedFiles,
-    )
-    if (
-      parsedRequest.selectedFiles &&
-      selection.eligible.length !== new Set(parsedRequest.selectedFiles).size
-    ) {
-      throw new HttpError(400, 'invalid_selected_files')
-    }
-    if (selection.eligible.length === 0) {
-      throw new HttpError(400, 'no_executable_code')
-    }
-    const changedLines = selection.eligible.reduce(
-      (sum, file) => sum + file.changes,
-      0,
-    )
-    if (changedLines > 3_000) {
-      throw new HttpError(413, 'change_too_large')
-    }
-
+      )
+      .catch((error: unknown) => {
+        if (access.isPrivate) {
+          throw new HttpError(403, 'github_app_installation_required')
+        }
+        throw error
+      })
     const resolvedRequest = {
       ...parsedRequest,
-      selectedFiles: selection.eligible.map((file) => file.path),
+      owner: snapshot.owner,
+      repository: snapshot.repository,
+      ref: snapshot.resolvedRef,
     }
-    const idempotencyKey = explanationIdempotencyKey(
+    let idempotencyKey = explanationIdempotencyKey(
       session.userId,
       resolvedRequest,
+      snapshot.commitSha,
     )
     const database = databaseClient()
     const existing = await getExplanationByIdempotencyKey(
@@ -102,10 +75,21 @@ export async function POST(request: Request) {
       idempotencyKey,
       session.userId,
     )
-    if (existing) {
+    if (
+      existing &&
+      existing.status !== 'failed' &&
+      existing.status !== 'canceled'
+    ) {
       return jsonNoStore(
         { explanation: await publicExplanation(existing) },
         { status: 200 },
+      )
+    }
+    if (existing) {
+      idempotencyKey = explanationIdempotencyKey(
+        session.userId,
+        { ...resolvedRequest, forceRegenerate: true },
+        snapshot.commitSha,
       )
     }
 
@@ -116,19 +100,66 @@ export async function POST(request: Request) {
     )
     if (recentCount >= 25) throw new HttpError(429, 'daily_quota_reached')
 
+    // Scan while the authenticated GitHub OAuth token is available. Trigger
+    // payloads intentionally contain only the explanation UUID, so deferring
+    // this step would force public repositories onto GitHub's tiny anonymous
+    // rate limit whenever the App is not installed on that repository.
+    const prepared = await prepareRepository({
+      client: github,
+      coordinate: resolvedRequest,
+      expectedCommitSha: snapshot.commitSha,
+      allowPublicFallback,
+      fallbackAccessToken: session.accessToken,
+    })
+    const analysis = createDeterministicComicAnalysis({
+      repository: `${prepared.snapshot.owner}/${prepared.snapshot.repository}`,
+      description: prepared.maskedDescription,
+      ref: prepared.snapshot.resolvedRef,
+      commitSha: prepared.snapshot.commitSha,
+      evidence: prepared.evidence,
+      excludedFiles: prepared.excludedFiles,
+      safetyIdentifier: createSafetyIdentifier(
+        session.userId,
+        getServerEnv().SAFETY_IDENTIFIER_SECRET,
+      ),
+    })
+    const scanSummary = {
+      totalTreeFiles: prepared.totalTreeFiles,
+      selectedFileCount: prepared.selectedFiles.length,
+      excludedFileCount: prepared.excludedFileCount,
+      scannedCharacters: prepared.scannedCharacters,
+      commitSha: prepared.snapshot.commitSha,
+      ref: prepared.snapshot.resolvedRef,
+    }
     const explanation = await createExplanation(database, {
       userId: session.userId,
       request: resolvedRequest,
-      baseSha: snapshot.baseSha,
+      commitSha: snapshot.commitSha,
+      resolvedRef: snapshot.resolvedRef,
       isPrivate: access.isPrivate,
       idempotencyKey,
+      scanSummary,
     })
+    await saveRepositoryScan(database, {
+      explanationId: explanation.id,
+      selectedFiles: prepared.selectedFiles,
+      excludedFiles: prepared.excludedFiles,
+      scanSummary,
+    })
+    await saveExplanationAnalysis(database, {
+      explanationId: explanation.id,
+      analysis,
+    })
+    explanation.analysis = analysis
+    explanation.selected_files = prepared.selectedFiles
+    explanation.excluded_files = prepared.excludedFiles
+    explanation.status = 'illustrating'
+    explanation.progress_percent = 60
+    explanation.progress_message = 'Storyboard verified; creating artwork'
     if (!explanation.trigger_run_id) {
       const triggerIdempotencyKey = await idempotencyKeys.create(
         idempotencyKey,
-        {
-          scope: 'global',
-        },
+        { scope: 'global' },
       )
       const handle = await tasks.trigger<typeof generateComicTask>(
         'generate-comic',
@@ -145,10 +176,11 @@ export async function POST(request: Request) {
     await recordAuditEvent(database, {
       explanationId: explanation.id,
       actorUserId: session.userId,
-      eventType: 'generation_requested',
+      eventType: 'repository_generation_requested',
       metadata: {
-        selectedFileCount: resolvedRequest.selectedFiles.length,
-        changedLines,
+        ref: snapshot.resolvedRef,
+        commitSha: snapshot.commitSha,
+        creatorCreditsUsed: false,
       },
     }).catch(() => undefined)
 

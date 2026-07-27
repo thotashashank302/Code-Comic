@@ -16,10 +16,11 @@ import {
   recordAuditEvent,
   recordUsage,
   saveExplanationAnalysis,
+  saveRepositoryScan,
   updateExplanationProgress,
   uploadComicArtifact,
 } from '@comic-code/database'
-import { GitHubAppClient, preparePullRequest } from '@comic-code/github'
+import { GitHubAppClient, prepareRepository } from '@comic-code/github'
 
 import { getWorkerEnv } from '@/lib/env'
 
@@ -29,9 +30,10 @@ const generationPayloadSchema = z.object({
 
 function safeErrorCode(error: unknown) {
   if (!(error instanceof Error)) return 'generation_failed'
-  if (error.message.includes('head changed')) return 'pull_request_changed'
-  if (error.message.includes('3,000 changed-line')) return 'change_too_large'
-  if (error.message.includes('no executable code')) return 'no_executable_code'
+  if (error.message.includes('ref changed')) return 'repository_changed'
+  if (error.message.includes('no readable executable')) {
+    return 'no_executable_code'
+  }
   if (error.message.includes('deleted')) return 'deleted_during_generation'
   if (error.message.includes('artwork')) return 'artwork_failed'
   if (error.message.includes('Grounding')) return 'grounding_failed'
@@ -67,6 +69,7 @@ export const generateComicTask = schemaTask({
         env.SAFETY_IDENTIFIER_SECRET,
       )
       let analysis = row.analysis
+      let selectedFiles = row.selected_files
 
       if (!analysis) {
         metadata.set('stage', 'fetching').set('percent', 10)
@@ -80,16 +83,29 @@ export const generateComicTask = schemaTask({
           appId: env.GITHUB_APP_ID,
           privateKeyBase64: env.GITHUB_PRIVATE_KEY_BASE64,
         })
-        const prepared = await preparePullRequest({
+        const prepared = await prepareRepository({
           client: github,
           coordinate: {
             owner: row.github_owner,
             repository: row.github_repository,
-            pullRequestNumber: row.pull_request_number,
+            ref: row.repository_ref,
           },
-          expectedHeadSha: row.head_sha,
-          selectedFiles: row.selected_files,
+          expectedCommitSha: row.commit_sha,
           allowPublicFallback: !row.is_private,
+        })
+        selectedFiles = prepared.selectedFiles
+        await saveRepositoryScan(database, {
+          explanationId,
+          selectedFiles,
+          excludedFiles: prepared.excludedFiles,
+          scanSummary: {
+            totalTreeFiles: prepared.totalTreeFiles,
+            selectedFileCount: prepared.selectedFiles.length,
+            excludedFileCount: prepared.excludedFileCount,
+            scannedCharacters: prepared.scannedCharacters,
+            commitSha: prepared.snapshot.commitSha,
+            ref: prepared.snapshot.resolvedRef,
+          },
         })
 
         metadata.set('stage', 'analyzing').set('percent', 30)
@@ -100,10 +116,10 @@ export const generateComicTask = schemaTask({
           message: 'Analyzing what the selected code does',
         })
         const analysisInput = {
-          title: prepared.maskedTitle,
+          repository: `${prepared.snapshot.owner}/${prepared.snapshot.repository}`,
           description: prepared.maskedDescription,
-          baseSha: prepared.snapshot.baseSha,
-          headSha: prepared.snapshot.headSha,
+          ref: prepared.snapshot.resolvedRef,
+          commitSha: prepared.snapshot.commitSha,
           evidence: prepared.evidence,
           excludedFiles: prepared.excludedFiles,
           safetyIdentifier,
@@ -162,7 +178,7 @@ export const generateComicTask = schemaTask({
           explanationId,
           analysis,
           excludedFiles: analysis.excludedFiles,
-          selectedFiles: row.selected_files,
+          selectedFiles,
           artifactPath,
           progressMessage: 'Comic ready · API-free source preview',
         })

@@ -29,9 +29,9 @@ Verify:
 From `apps/web`:
 
 ```bash
-pnpm exec trigger.dev login
-pnpm exec trigger.dev dev
-pnpm exec trigger.dev deploy
+pnpm exec trigger login
+pnpm exec trigger dev
+pnpm exec trigger deploy
 ```
 
 Set only the worker environment listed in the README. Confirm the deployed task ID is `generate-comic` and its concurrency limit is two.
@@ -68,21 +68,21 @@ pnpm --filter @comic-code/extension zip
 ```
 
 - Load `apps/extension/.output/chrome-mv3` unpacked in a clean Chrome profile.
-- Verify toolbar click, injected **Explain PR**, login, progress, story, evidence, download, share, compact mode, and sign-out.
+- Verify toolbar click, injected **Explain Repository**, login, progress, story, evidence, download, share, compact mode, and sign-out.
 
 ## 7. Live acceptance test
 
-Test one public and one private PR:
+Test one public and one private repository:
 
 1. Capture the current head SHA.
 2. Select safe files under the limits.
 3. Generate a storyboard and artwork.
 4. Confirm every displayed claim has evidence.
-5. Inspect database/Trigger/Vercel logs for absence of raw diff text and tokens.
+5. Inspect database/Trigger/Vercel logs for absence of raw repository source and tokens.
 6. Download the PNG.
 7. Create, open, and revoke a share.
 8. Delete the explanation and confirm subsequent access fails.
-9. Change a test PR head and confirm stale generation fails closed.
+9. Move a test branch after inspection and confirm generation still reads the captured immutable commit.
 
 ## 8. Release gate
 

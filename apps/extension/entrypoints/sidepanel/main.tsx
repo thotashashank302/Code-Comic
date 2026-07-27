@@ -9,29 +9,26 @@ import './style.css'
 type Coordinate = {
   owner: string
   repository: string
-  pullRequestNumber: number
+  ref?: string
 }
-type PullRequestFile = {
-  path: string
-  status: string
-  additions: number
-  deletions: number
-  changes: number
-}
-type PullRequest = Coordinate & {
-  title: string
+type Repository = Coordinate & {
+  description: string
   htmlUrl: string
   isPrivate: boolean
-  baseSha: string
-  headSha: string
-  files: PullRequestFile[]
+  defaultBranch: string
+  commitSha: string
+  totalFiles: number
+  selectedFileCount: number
   excludedFileCount: number
-  selectedChangedLines: number
+  representativeFiles: string[]
+  languages: string[]
 }
 type Explanation = {
   id: string
   repository: string
-  pullRequestNumber: number
+  ref: string
+  commitSha: string
+  scanSummary: Record<string, unknown>
   status: string
   progress: { percent: number; message: string; updatedAt: string }
   analysis: ComicAnalysis | null
@@ -45,24 +42,83 @@ type StoredState = {
   comicCodeCompact?: boolean
   comicCodeCloudflareAccountId?: string
   comicCodeCloudflareApiToken?: string
+  comicCodeExplanationIds?: Record<string, string>
 }
 type Tab = 'explain' | 'story' | 'evidence'
 
-const apiBase = (
-  import.meta.env.WXT_PUBLIC_API_BASE_URL || 'http://localhost:3000'
-).replace(/\/$/, '')
-const terminalStatuses = new Set(['completed', 'failed', 'canceled', 'deleted'])
+const configuredApiBase = import.meta.env.WXT_PUBLIC_API_BASE_URL?.trim()
 
-function parsePullRequestUrl(value: string | undefined): Coordinate | null {
+if (!configuredApiBase && import.meta.env.PROD) {
+  throw new Error(
+    'WXT_PUBLIC_API_BASE_URL is required for production extension builds',
+  )
+}
+
+const apiBase = (configuredApiBase || 'http://localhost:3000').replace(
+  /\/$/,
+  '',
+)
+const terminalStatuses = new Set(['completed', 'failed', 'canceled', 'deleted'])
+const reservedGitHubSections = new Set([
+  'apps',
+  'explore',
+  'issues',
+  'login',
+  'marketplace',
+  'notifications',
+  'orgs',
+  'pulls',
+  'search',
+  'settings',
+  'signup',
+  'topics',
+])
+
+function coordinateKey(coordinate: Coordinate) {
+  return `${coordinate.owner.toLowerCase()}/${coordinate.repository.toLowerCase()}`
+}
+
+async function persistExplanationId(
+  coordinate: Coordinate,
+  explanationId: string,
+) {
+  const stored = (await chrome.storage.local.get(
+    'comicCodeExplanationIds',
+  )) as Pick<StoredState, 'comicCodeExplanationIds'>
+  await chrome.storage.local.set({
+    comicCodeExplanationIds: {
+      ...stored.comicCodeExplanationIds,
+      [coordinateKey(coordinate)]: explanationId,
+    },
+  })
+}
+
+async function removePersistedExplanationId(coordinate: Coordinate) {
+  const stored = (await chrome.storage.local.get(
+    'comicCodeExplanationIds',
+  )) as Pick<StoredState, 'comicCodeExplanationIds'>
+  const explanationIds = { ...stored.comicCodeExplanationIds }
+  delete explanationIds[coordinateKey(coordinate)]
+  await chrome.storage.local.set({
+    comicCodeExplanationIds: explanationIds,
+  })
+}
+
+function parseRepositoryUrl(value: string | undefined): Coordinate | null {
   if (!value) return null
   try {
     const url = new URL(value)
-    const match = url.pathname.match(/^\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/|$)/)
-    if (url.hostname !== 'github.com' || !match) return null
+    const segments = url.pathname.split('/').filter(Boolean)
+    if (
+      url.hostname !== 'github.com' ||
+      segments.length < 2 ||
+      reservedGitHubSections.has(segments[0]!)
+    ) {
+      return null
+    }
     return {
-      owner: match[1]!,
-      repository: match[2]!,
-      pullRequestNumber: Number(match[3]),
+      owner: decodeURIComponent(segments[0]!),
+      repository: decodeURIComponent(segments[1]!).replace(/\.git$/i, ''),
     }
   } catch {
     return null
@@ -78,13 +134,13 @@ function friendlyError(value: string) {
     return value
   }
   const messages: Record<string, string> = {
-    authentication_required: 'Connect GitHub to explain this pull request.',
-    pull_request_changed: 'This PR changed. Refresh it before generating.',
-    change_too_large: 'Select fewer files to stay below 3,000 changed lines.',
+    authentication_required: 'Connect GitHub to explain this repository.',
+    repository_changed:
+      'This repository branch moved. Inspect it again before generating.',
     daily_quota_reached: 'You reached the 25-comic daily safety limit.',
-    no_eligible_files: 'No safe text files are available to explain.',
+    invalid_repository_url: 'Open a full GitHub repository URL.',
     no_executable_code:
-      'This PR changes documentation or unsupported files, not executable code.',
+      'This repository has no safe, readable source files to explain.',
     github_reconnect_required:
       'Your GitHub login expired. Reconnect GitHub, then try again.',
     github_access_denied:
@@ -125,20 +181,32 @@ async function requestApi<T>(
       ...init?.headers,
     },
   })
-  const data = (await response.json()) as T & {
+  const responseText = await response.text()
+  const data = (
+    responseText
+      ? (() => {
+          try {
+            return JSON.parse(responseText) as T
+          } catch {
+            return {} as T
+          }
+        })()
+      : ({} as T)
+  ) as T & {
     error?: string
     detail?: string
   }
   if (!response.ok)
-    throw new Error(data.detail ?? data.error ?? 'request_failed')
+    throw new Error(
+      data.detail ?? data.error ?? `request_failed_${response.status}`,
+    )
   return data
 }
 
 function SidePanelShell() {
   const [coordinate, setCoordinate] = useState<Coordinate | null>(null)
   const [session, setSession] = useState<string | null>(null)
-  const [pullRequest, setPullRequest] = useState<PullRequest | null>(null)
-  const [selectedFiles, setSelectedFiles] = useState<string[]>([])
+  const [repository, setRepository] = useState<Repository | null>(null)
   const [explanation, setExplanation] = useState<Explanation | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('explain')
   const [busy, setBusy] = useState(false)
@@ -171,7 +239,7 @@ function SidePanelShell() {
         active: true,
         currentWindow: true,
       })
-      const tabCoordinate = parsePullRequestUrl(tab?.url)
+      const tabCoordinate = parseRepositoryUrl(tab?.url)
       if (!active) return
       setCoordinate(tabCoordinate ?? stored.comicCodeCoordinate ?? null)
       setSession(stored.comicCodeSession ?? null)
@@ -195,7 +263,7 @@ function SidePanelShell() {
     ) => {
       if (area === 'local' && changes.comicCodeCoordinate?.newValue) {
         setCoordinate(changes.comicCodeCoordinate.newValue as Coordinate)
-        setPullRequest(null)
+        setRepository(null)
         setExplanation(null)
         setAiGenerationRequested(false)
         setActiveTab('explain')
@@ -214,15 +282,42 @@ function SidePanelShell() {
     const inspect = async () => {
       setBusy(true)
       setError(null)
-      const url = `https://github.com/${coordinate.owner}/${coordinate.repository}/pull/${coordinate.pullRequestNumber}`
+      const url = `https://github.com/${coordinate.owner}/${coordinate.repository}`
       try {
-        const result = await requestApi<{ pullRequest: PullRequest }>(
-          `/api/v1/github/pull-request?url=${encodeURIComponent(url)}`,
+        const result = await requestApi<{ repository: Repository }>(
+          `/api/v1/github/repository?url=${encodeURIComponent(url)}`,
           session,
         )
         if (active) {
-          setPullRequest(result.pullRequest)
-          setSelectedFiles(result.pullRequest.files.map((file) => file.path))
+          setRepository(result.repository)
+
+          const stored = (await chrome.storage.local.get(
+            'comicCodeExplanationIds',
+          )) as Pick<StoredState, 'comicCodeExplanationIds'>
+          const persistedId =
+            stored.comicCodeExplanationIds?.[coordinateKey(coordinate)]
+          if (persistedId) {
+            const recovered = await requestApi<{ explanation: Explanation }>(
+              `/api/v1/explanations/${persistedId}`,
+              session,
+            ).catch(() => null)
+            if (
+              active &&
+              recovered &&
+              recovered.explanation.repository.toLowerCase() ===
+                `${coordinate.owner}/${coordinate.repository}`.toLowerCase()
+            ) {
+              setExplanation(recovered.explanation)
+              if (
+                recovered.explanation.analysis &&
+                recovered.explanation.status !== 'failed'
+              ) {
+                setActiveTab('story')
+              }
+            } else if (recovered) {
+              await removePersistedExplanationId(coordinate)
+            }
+          }
         }
       } catch (caught) {
         if (active) {
@@ -248,6 +343,7 @@ function SidePanelShell() {
   const explanationStatus = explanation?.status
   useEffect(() => {
     if (
+      !coordinate ||
       !session ||
       !explanationId ||
       !explanationStatus ||
@@ -264,6 +360,7 @@ function SidePanelShell() {
         )
         if (active) {
           setExplanation(result.explanation)
+          void persistExplanationId(coordinate, result.explanation.id)
           if (
             result.explanation.analysis &&
             (!pendingCloudflare.current ||
@@ -282,7 +379,27 @@ function SidePanelShell() {
       active = false
       window.clearInterval(interval)
     }
-  }, [explanationId, explanationStatus, session])
+  }, [coordinate, explanationId, explanationStatus, session])
+
+  useEffect(() => {
+    if (
+      !session ||
+      !explanationId ||
+      explanationStatus !== 'completed' ||
+      !explanation?.artifactUrl
+    ) {
+      return
+    }
+    const refreshArtifact = async () => {
+      const result = await requestApi<{ explanation: Explanation }>(
+        `/api/v1/explanations/${explanationId}`,
+        session,
+      ).catch(() => null)
+      if (result) setExplanation(result.explanation)
+    }
+    const interval = window.setInterval(refreshArtifact, 4 * 60 * 1_000)
+    return () => window.clearInterval(interval)
+  }, [explanation?.artifactUrl, explanationId, explanationStatus, session])
 
   const connectGitHub = async () => {
     setError(null)
@@ -310,7 +427,7 @@ function SidePanelShell() {
   }
 
   const generate = async () => {
-    if (!session || !pullRequest || selectedFiles.length === 0) return
+    if (!session || !repository) return
     setBusy(true)
     setError(null)
     setNotice(null)
@@ -329,16 +446,15 @@ function SidePanelShell() {
         {
           method: 'POST',
           body: JSON.stringify({
-            owner: pullRequest.owner,
-            repository: pullRequest.repository,
-            pullRequestNumber: pullRequest.pullRequestNumber,
-            headSha: pullRequest.headSha,
-            selectedFiles,
+            owner: repository.owner,
+            repository: repository.repository,
+            ref: repository.ref,
             forceRegenerate: Boolean(explanation),
           }),
         },
       )
       setExplanation(result.explanation)
+      void persistExplanationId(repository, result.explanation.id)
     } catch (caught) {
       pendingCloudflare.current = false
       setAiGenerationRequested(false)
@@ -354,13 +470,21 @@ function SidePanelShell() {
 
   const createShare = async () => {
     if (!session || !explanation) return
-    const result = await requestApi<{ share: { url: string } }>(
-      `/api/v1/explanations/${explanation.id}/shares`,
-      session,
-      { method: 'POST' },
-    )
-    await navigator.clipboard.writeText(result.share.url)
-    setNotice('Private 7-day link copied')
+    try {
+      const result = await requestApi<{ share: { url: string } }>(
+        `/api/v1/explanations/${explanation.id}/shares`,
+        session,
+        { method: 'POST' },
+      )
+      await navigator.clipboard.writeText(result.share.url)
+      setNotice('Private 7-day link copied')
+    } catch (caught) {
+      setError(
+        friendlyError(
+          caught instanceof Error ? caught.message : 'request_failed',
+        ),
+      )
+    }
   }
 
   const generateWithCloudflare = useCallback(
@@ -388,6 +512,9 @@ function SidePanelShell() {
           },
         )
         setExplanation(result.explanation)
+        if (coordinate) {
+          void persistExplanationId(coordinate, result.explanation.id)
+        }
         setAiGenerationRequested(false)
         setActiveTab('story')
         setNotice(
@@ -398,8 +525,17 @@ function SidePanelShell() {
           `/api/v1/explanations/${target.id}`,
           session,
         ).catch(() => null)
-        if (failed) setExplanation(failed.explanation)
-        setActiveTab('explain')
+        if (failed) {
+          setExplanation(failed.explanation)
+          setActiveTab(
+            failed.explanation.status === 'completed' &&
+              failed.explanation.analysis
+              ? 'story'
+              : 'explain',
+          )
+        } else {
+          setActiveTab('explain')
+        }
         setError(
           friendlyError(
             caught instanceof Error ? caught.message : 'request_failed',
@@ -409,7 +545,7 @@ function SidePanelShell() {
         setArtworkBusy(false)
       }
     },
-    [cloudflareAccountId, cloudflareApiToken, session],
+    [cloudflareAccountId, cloudflareApiToken, coordinate, session],
   )
 
   useEffect(() => {
@@ -446,7 +582,7 @@ function SidePanelShell() {
   const logout = async () => {
     await chrome.storage.local.remove('comicCodeSession')
     setSession(null)
-    setPullRequest(null)
+    setRepository(null)
     setExplanation(null)
     setAiGenerationRequested(false)
   }
@@ -463,7 +599,7 @@ function SidePanelShell() {
           </span>
           <div>
             <strong>Comic Code</strong>
-            <small>PRs, translated visually</small>
+            <small>Repositories, translated visually</small>
           </div>
         </div>
         <button
@@ -482,19 +618,19 @@ function SidePanelShell() {
             {coordinate.owner}/{coordinate.repository}
           </span>
           <div>
-            <strong>Pull request #{coordinate.pullRequestNumber}</strong>
+            <strong>Repository architecture</strong>
             <span className="live-dot">Live</span>
           </div>
-          {pullRequest ? <p>{pullRequest.title}</p> : null}
+          {repository?.description ? <p>{repository.description}</p> : null}
         </section>
       ) : (
         <section className="empty-state">
           <span className="empty-glyph">
             <BrandGlyph />
           </span>
-          <h1>Open a GitHub pull request.</h1>
+          <h1>Open a GitHub repository.</h1>
           <p>
-            Comic Code appears beside the diff and keeps working as you browse.
+            Comic Code maps its important parts and explains them as one system.
           </p>
         </section>
       )}
@@ -556,36 +692,20 @@ function SidePanelShell() {
 
       {coordinate && session && activeTab === 'explain' ? (
         <section className="panel-content">
-          {pullRequest ? (
+          {repository ? (
             <>
               <div className="section-title">
                 <div>
-                  <span className="eyebrow">Selected source code</span>
-                  <h2>Code files to explain</h2>
+                  <span className="eyebrow">Repository scan</span>
+                  <h2>Representative architecture</h2>
                 </div>
-                <span>
-                  {selectedFiles.length}/{pullRequest.files.length}
-                </span>
+                <span>{repository.selectedFileCount} files</span>
               </div>
               <div className="side-file-list">
-                {pullRequest.files.map((file) => (
-                  <label className="side-file" key={file.path}>
-                    <input
-                      type="checkbox"
-                      checked={selectedFiles.includes(file.path)}
-                      onChange={() =>
-                        setSelectedFiles((current) =>
-                          current.includes(file.path)
-                            ? current.filter((path) => path !== file.path)
-                            : [...current, file.path],
-                        )
-                      }
-                    />
-                    <code>{file.path}</code>
-                    <small>
-                      <b>+{file.additions}</b> −{file.deletions}
-                    </small>
-                  </label>
+                {repository.representativeFiles.map((path) => (
+                  <div className="side-file" key={path}>
+                    <code>{path}</code>
+                  </div>
                 ))}
               </div>
               <section
@@ -668,7 +788,7 @@ function SidePanelShell() {
                 className="primary-action primary-action--amber"
                 type="button"
                 onClick={generate}
-                disabled={busy || selectedFiles.length === 0}
+                disabled={busy}
               >
                 {busy
                   ? 'Preparing source preview…'
@@ -685,14 +805,15 @@ function SidePanelShell() {
               <div className="privacy-note">
                 <span>✦</span>
                 <p>
-                  Reads selected files at the PR head, not only the diff. Up to
-                  20 files; secrets and generated files are excluded.
+                  Scans repository tree, then reads up to 40 representative
+                  files at commit {repository.commitSha.slice(0, 7)}. Secrets,
+                  binaries, dependencies, and generated files stay excluded.
                 </p>
               </div>
             </>
           ) : (
             <div className="loading-state">
-              <span /> Reading the pull request…
+              <span /> Mapping repository architecture…
             </div>
           )}
 
@@ -751,7 +872,7 @@ function SidePanelShell() {
           {explanation.artifactUrl ? (
             <img
               src={explanation.artifactUrl}
-              alt="Generated four-panel pull request comic"
+              alt="Generated four-panel repository comic"
               referrerPolicy="no-referrer"
             />
           ) : null}
@@ -810,7 +931,7 @@ function SidePanelShell() {
                 <small>
                   {evidence.newStart
                     ? `Lines ${evidence.newStart}–${evidence.newEnd}`
-                    : 'PR metadata'}{' '}
+                    : 'Repository context'}{' '}
                   · {evidence.id}
                 </small>
               </div>

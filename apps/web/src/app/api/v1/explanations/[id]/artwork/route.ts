@@ -10,7 +10,7 @@ import {
   uploadComicArtifact,
 } from '@comic-code/database'
 import { regenerateArtworkRequestSchema } from '@comic-code/contracts'
-import { githubRequestStatus, preparePullRequest } from '@comic-code/github'
+import { githubRequestStatus, prepareRepository } from '@comic-code/github'
 
 import { requireRequestSession } from '@/lib/auth/session'
 import { getServerEnv } from '@/lib/env'
@@ -29,6 +29,7 @@ type RouteContext = { params: Promise<{ id: string }> }
 export async function POST(request: Request, context: RouteContext) {
   let stage = 'request'
   let explanationId: string | undefined
+  let preserveExistingComic = false
   try {
     assertSameOrigin(request)
     const session = await requireRequestSession(request)
@@ -43,6 +44,10 @@ export async function POST(request: Request, context: RouteContext) {
     explanationId = id
     const database = databaseClient()
     const row = await getOwnedExplanation(database, id, session.userId)
+    preserveExistingComic =
+      row.status === 'completed' &&
+      Boolean(row.analysis) &&
+      Boolean(row.final_artifact_path)
     if (!['completed', 'failed'].includes(row.status) || !row.analysis) {
       throw new HttpError(409, 'explanation_not_ready')
     }
@@ -59,15 +64,14 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     stage = 'code_preparation'
-    const prepared = await preparePullRequest({
+    const prepared = await prepareRepository({
       client: github,
       coordinate: {
         owner: row.github_owner,
         repository: row.github_repository,
-        pullRequestNumber: row.pull_request_number,
+        ref: row.repository_ref,
       },
-      expectedHeadSha: row.head_sha,
-      selectedFiles: row.selected_files,
+      expectedCommitSha: row.commit_sha,
       allowPublicFallback: !access.isPrivate,
       fallbackAccessToken: session.accessToken,
     })
@@ -88,10 +92,10 @@ export async function POST(request: Request, context: RouteContext) {
     stage = 'code_analysis'
     const analyzed = await analyzeCloudflareComic(
       {
-        title: prepared.maskedTitle,
+        repository: `${prepared.snapshot.owner}/${prepared.snapshot.repository}`,
         description: prepared.maskedDescription,
-        baseSha: prepared.snapshot.baseSha,
-        headSha: prepared.snapshot.headSha,
+        ref: prepared.snapshot.resolvedRef,
+        commitSha: prepared.snapshot.commitSha,
         evidence: prepared.evidence,
         excludedFiles: prepared.excludedFiles,
         safetyIdentifier: createSafetyIdentifier(
@@ -207,7 +211,7 @@ export async function POST(request: Request, context: RouteContext) {
           0,
           4_000,
         )
-      if (explanationId) {
+      if (explanationId && !preserveExistingComic) {
         await failExplanation(databaseClient(), {
           explanationId,
           errorCode: providerCode,
@@ -242,7 +246,7 @@ export async function POST(request: Request, context: RouteContext) {
     }
     if (
       error instanceof Error &&
-      error.message.includes('no executable code evidence')
+      error.message.includes('no readable executable source')
     ) {
       return routeErrorResponse(new HttpError(400, 'no_executable_code'))
     }
@@ -254,6 +258,7 @@ export async function POST(request: Request, context: RouteContext) {
     })
     if (
       explanationId &&
+      !preserveExistingComic &&
       [
         'runtime_dependencies',
         'code_analysis',

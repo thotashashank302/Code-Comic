@@ -2,7 +2,7 @@
 
 ## Scope
 
-Comic Code handles private source code and treats pull-request titles, descriptions, paths, patches, and generated model output as untrusted.
+Comic Code handles private source code and treats repository names, descriptions, README content, manifests, paths, source, and generated model output as untrusted.
 
 ## Implemented controls
 
@@ -10,7 +10,7 @@ Comic Code handles private source code and treats pull-request titles, descripti
 - Authenticated/encrypted seven-hour session JWE; browser cookies are HttpOnly, SameSite Lax, and Secure in production.
 - Bearer sessions returned to the extension only in the `chromiumapp.org` URL fragment.
 - Read-only GitHub permissions and separate user-access plus installation-access checks for private repositories.
-- Server verification of repository, PR number, selected paths, and captured head SHA.
+- Server verification of repository access, requested ref, and captured immutable commit SHA.
 - Exclusion of `.env`, credentials, lockfiles, binary, generated, vendored, minified, and oversized reconstructed files.
 - Secret/token/email/connection-string masking plus high-entropy masking.
 - Prompt-injection boundaries, strict Zod structured output, no model tools, and opaque safety identifiers.
@@ -26,7 +26,7 @@ Comic Code handles private source code and treats pull-request titles, descripti
 
 ## Data that is persisted
 
-Repository/PR coordinates, captured SHAs, selected/excluded file paths, evidence line locators and hashes, sanitized claims/storyboard text, generated PNG paths, usage counts, progress, and low-cardinality audit metadata.
+Repository coordinates, captured ref and commit SHA, scan summary, selected/excluded file paths, evidence line locators and hashes, sanitized claims/storyboard text, generated PNG paths, usage counts, progress, and low-cardinality audit metadata.
 
 Raw patches, source blobs, prompt bodies containing source, GitHub access tokens, OAuth codes, share tokens, and provider request bodies are not persisted.
 
