@@ -57,6 +57,7 @@ export async function GET(request: Request) {
         coordinate,
         allowPublicFallback,
         session.accessToken,
+        true,
       )
       .catch((error: unknown) => {
         if (access.isPrivate) {

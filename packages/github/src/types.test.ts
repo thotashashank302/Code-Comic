@@ -17,7 +17,7 @@ describe('parseGitHubRepositoryUrl', () => {
     ).toEqual({
       owner: 'openai',
       repository: 'openai-node',
-      ref: 'release',
+      ref: 'release/src',
     })
   })
 

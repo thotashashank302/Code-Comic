@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+export * from './repository-url'
+
 export const maxPersistedExcludedFiles = 500
 
 export const repositoryCoordinateSchema = z.object({
@@ -10,6 +12,7 @@ export const repositoryCoordinateSchema = z.object({
 
 export const createExplanationRequestSchema = repositoryCoordinateSchema.extend(
   {
+    commitSha: z.string().regex(/^[a-f0-9]{40}$/i),
     forceRegenerate: z.boolean().default(false),
   },
 )

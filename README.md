@@ -39,7 +39,7 @@ Raw source, reconstructed patches, and prompts containing source exist only in a
 
 Cloudflare BYOK Account IDs and API tokens are accepted only by the authenticated code-analysis/artwork route over HTTPS. They remain in webpage tab memory or Chrome extension local storage, are never placed in Trigger.dev payloads, and are never persisted by Comic Code servers, databases, logs, or audit records. Masked selected code context is sent transiently to Cloudflare for Llama analysis and claim verification; FLUX then generates four images. The user's Cloudflare account pays for both text and image inference.
 
-The worker receives only an explanation UUID. It scans the captured repository commit, reads representative files, masks secrets, creates an API-free preview, and persists only sanitized claims, captions, evidence locators/hashes, scan metadata, and generated artwork. If a user supplies Cloudflare credentials, the authenticated web route refetches the same bounded repository evidence and sends it transiently to that user's Workers AI account.
+The authenticated web request scans the inspected immutable commit while the GitHub OAuth token is available, masks source, and persists sanitized analysis and scan metadata. The worker receives only an explanation UUID and composes artwork from that analysis; recovery can rescan when analysis is missing. Raw source is never included in its payload. If a user supplies Cloudflare credentials, the authenticated web route refetches the same bounded repository evidence and sends it transiently to that user's Workers AI account.
 
 See [SECURITY.md](./SECURITY.md) for the threat model and residual considerations.
 
@@ -173,15 +173,15 @@ pnpm --filter @comic-code/extension build
 pnpm --filter @comic-code/extension zip
 ```
 
-Current local verification:
+Local verification for the merge-readiness fixes (2026-09-30):
 
 - Production dependency audit: no known vulnerabilities.
-- 25 unit/security/scanning/composition tests passing.
+- 44 unit/security/scanning/composition/route/migration tests passing.
 - TypeScript passing across all workspaces.
 - ESLint passing with zero warnings.
 - Next.js production build passing for every page and API route.
 - WXT Chrome MV3 build and ZIP passing.
-- Browser checks passing at 1280 px and 390 px with no runtime errors or horizontal overflow.
+- Browser checks from the initial build covered 1280 px and 390 px. Authenticated hosted acceptance tests remain a separate release gate.
 
 Live integration tests require real service credentials and test repositories; they cannot be meaningfully mocked as proof of deployment readiness.
 

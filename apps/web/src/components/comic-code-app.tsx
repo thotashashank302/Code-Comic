@@ -169,7 +169,13 @@ export function ComicCodeApp() {
 
   const inspectRepository = async () => {
     if (!user) {
-      window.location.assign('/api/v1/auth/github/start?return_to=/')
+      // OAuth needs a full browser navigation so the GitHub redirect can leave the app.
+      window.location.assign(
+        new URL(
+          '/api/v1/auth/github/start?return_to=/',
+          window.location.origin,
+        ),
+      )
       return
     }
     setBusy(true)
@@ -210,6 +216,7 @@ export function ComicCodeApp() {
             owner: repository.owner,
             repository: repository.repository,
             ref: repository.ref,
+            commitSha: repository.commitSha,
             forceRegenerate: Boolean(explanation),
           }),
         },

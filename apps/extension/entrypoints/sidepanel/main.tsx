@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import type { ComicAnalysis } from '@comic-code/contracts'
+import { parseGitHubRepositoryUrl } from '@comic-code/contracts/repository-url'
 
 import { BrandGlyph } from './brand-glyph'
 import './style.css'
@@ -59,23 +60,12 @@ const apiBase = (configuredApiBase || 'http://localhost:3000').replace(
   '',
 )
 const terminalStatuses = new Set(['completed', 'failed', 'canceled', 'deleted'])
-const reservedGitHubSections = new Set([
-  'apps',
-  'explore',
-  'issues',
-  'login',
-  'marketplace',
-  'notifications',
-  'orgs',
-  'pulls',
-  'search',
-  'settings',
-  'signup',
-  'topics',
-])
-
 function coordinateKey(coordinate: Coordinate) {
-  return `${coordinate.owner.toLowerCase()}/${coordinate.repository.toLowerCase()}`
+  return JSON.stringify([
+    coordinate.owner.toLowerCase(),
+    coordinate.repository.toLowerCase(),
+    coordinate.ref ?? null,
+  ])
 }
 
 async function persistExplanationId(
@@ -105,24 +95,7 @@ async function removePersistedExplanationId(coordinate: Coordinate) {
 }
 
 function parseRepositoryUrl(value: string | undefined): Coordinate | null {
-  if (!value) return null
-  try {
-    const url = new URL(value)
-    const segments = url.pathname.split('/').filter(Boolean)
-    if (
-      url.hostname !== 'github.com' ||
-      segments.length < 2 ||
-      reservedGitHubSections.has(segments[0]!)
-    ) {
-      return null
-    }
-    return {
-      owner: decodeURIComponent(segments[0]!),
-      repository: decodeURIComponent(segments[1]!).replace(/\.git$/i, ''),
-    }
-  } catch {
-    return null
-  }
+  return value ? parseGitHubRepositoryUrl(value) : null
 }
 
 function friendlyError(value: string) {
@@ -282,7 +255,7 @@ function SidePanelShell() {
     const inspect = async () => {
       setBusy(true)
       setError(null)
-      const url = `https://github.com/${coordinate.owner}/${coordinate.repository}`
+      const url = `https://github.com/${coordinate.owner}/${coordinate.repository}${coordinate.ref ? `/tree/${coordinate.ref.split('/').map(encodeURIComponent).join('/')}` : ''}`
       try {
         const result = await requestApi<{ repository: Repository }>(
           `/api/v1/github/repository?url=${encodeURIComponent(url)}`,
@@ -304,6 +277,7 @@ function SidePanelShell() {
             if (
               active &&
               recovered &&
+              recovered.explanation.ref === result.repository.ref &&
               recovered.explanation.repository.toLowerCase() ===
                 `${coordinate.owner}/${coordinate.repository}`.toLowerCase()
             ) {
@@ -449,12 +423,14 @@ function SidePanelShell() {
             owner: repository.owner,
             repository: repository.repository,
             ref: repository.ref,
+            commitSha: repository.commitSha,
             forceRegenerate: Boolean(explanation),
           }),
         },
       )
       setExplanation(result.explanation)
-      void persistExplanationId(repository, result.explanation.id)
+      if (coordinate)
+        void persistExplanationId(coordinate, result.explanation.id)
     } catch (caught) {
       pendingCloudflare.current = false
       setAiGenerationRequested(false)

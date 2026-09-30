@@ -103,6 +103,7 @@ export class GitHubAppClient {
     coordinate: RepositoryCoordinate,
     allowPublicFallback = false,
     fallbackAccessToken?: string,
+    resolveTreePath = false,
   ): Promise<RepositorySnapshot> {
     const octokit = await this.getRepositoryOctokit(
       coordinate.owner,
@@ -114,15 +115,32 @@ export class GitHubAppClient {
       owner: coordinate.owner,
       repo: coordinate.repository,
     })
-    const resolvedRef = coordinate.ref ?? repository.data.default_branch
-    const commit = await octokit.request(
-      'GET /repos/{owner}/{repo}/commits/{ref}',
-      {
+    let resolvedRef = coordinate.ref ?? repository.data.default_branch
+    const readCommit = (ref: string) =>
+      octokit.request('GET /repos/{owner}/{repo}/commits/{ref}', {
         owner: coordinate.owner,
         repo: coordinate.repository,
-        ref: resolvedRef,
-      },
-    )
+        ref,
+      })
+    // A GitHub tree URL can contain both a slash-containing branch and a
+    // directory. Try the longest ref first; only inspection resolves paths.
+    const commit = await (async () => {
+      while (true) {
+        try {
+          return await readCommit(resolvedRef)
+        } catch (error) {
+          const separator = resolvedRef.lastIndexOf('/')
+          if (
+            !resolveTreePath ||
+            githubRequestStatus(error) !== 404 ||
+            separator < 0
+          ) {
+            throw error
+          }
+          resolvedRef = resolvedRef.slice(0, separator)
+        }
+      }
+    })()
 
     return {
       owner: repository.data.owner.login,

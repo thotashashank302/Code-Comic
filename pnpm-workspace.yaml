@@ -5,9 +5,15 @@ packages:
 overrides:
   '@opentelemetry/core@<2.8.0': '2.8.0'
   'cookie@<0.7.0': '0.7.2'
-  'engine.io@<6.6.7': '6.6.7'
-  'postcss@<8.5.10': '8.5.19'
+  'engine.io@<6.6.10': '6.6.10'
+  'postcss@<8.5.23': '8.5.23'
   'ws@>=8.0.0 <8.21.0': '8.21.1'
+
+  'browserslist@<4.28.7': '4.28.7'
+  'baseline-browser-mapping@<2.11.0': '2.11.0'
+  'nanoid@>=3.0.0 <3.3.18': '3.3.18'
+
+  'sharp@<0.35.4': '0.35.4'
 
 allowBuilds:
   '@depot/cli': false

@@ -8,6 +8,7 @@ import { createExplanationRequestSchema } from '@comic-code/contracts'
 import {
   countRecentExplanations,
   createExplanation,
+  failExplanation,
   getExplanationByIdempotencyKey,
   recordAuditEvent,
   saveExplanationAnalysis,
@@ -32,13 +33,39 @@ import {
   publicExplanation,
 } from '@/lib/server'
 
+export const maxDuration = 300
+
+async function dispatchExplanation(
+  database: ReturnType<typeof databaseClient>,
+  explanationId: string,
+  idempotencyKey: string,
+) {
+  const triggerIdempotencyKey = await idempotencyKeys.create(idempotencyKey, {
+    scope: 'global',
+  })
+  const handle = await tasks.trigger<typeof generateComicTask>(
+    'generate-comic',
+    { explanationId },
+    {
+      idempotencyKey: triggerIdempotencyKey,
+      idempotencyKeyTTL: '30d',
+      tags: [`explanation_${explanationId}`],
+    },
+  )
+  await setExplanationTriggerRun(database, explanationId, handle.id)
+  return handle.id
+}
+
 export async function POST(request: Request) {
+  let pendingExplanationId: string | undefined
   try {
     assertSameOrigin(request)
     const session = await requireRequestSession(request)
-    const parsedRequest = createExplanationRequestSchema.parse(
+    const parsed = createExplanationRequestSchema.safeParse(
       await request.json(),
     )
+    if (!parsed.success) throw new HttpError(400, 'invalid_generation_request')
+    const parsedRequest = parsed.data
     const github = githubClient()
     const access = await github.assertUserCanReadRepository(
       session.accessToken,
@@ -48,7 +75,7 @@ export async function POST(request: Request) {
     const allowPublicFallback = !access.isPrivate
     const snapshot = await github
       .getRepositorySnapshot(
-        parsedRequest,
+        { ...parsedRequest, ref: parsedRequest.commitSha },
         allowPublicFallback,
         session.accessToken,
       )
@@ -58,11 +85,16 @@ export async function POST(request: Request) {
         }
         throw error
       })
+    if (
+      snapshot.commitSha.toLowerCase() !== parsedRequest.commitSha.toLowerCase()
+    ) {
+      throw new HttpError(409, 'repository_changed')
+    }
     const resolvedRequest = {
       ...parsedRequest,
       owner: snapshot.owner,
       repository: snapshot.repository,
-      ref: snapshot.resolvedRef,
+      ref: parsedRequest.ref ?? snapshot.defaultBranch,
     }
     let idempotencyKey = explanationIdempotencyKey(
       session.userId,
@@ -80,10 +112,33 @@ export async function POST(request: Request) {
       existing.status !== 'failed' &&
       existing.status !== 'canceled'
     ) {
-      return jsonNoStore(
-        { explanation: await publicExplanation(existing) },
-        { status: 200 },
-      )
+      if (
+        !existing.trigger_run_id &&
+        existing.status !== 'completed' &&
+        existing.analysis
+      ) {
+        // Recover rows persisted before a process interruption. Trigger's key
+        // prevents a second job if the first dispatch was already accepted.
+        pendingExplanationId = existing.id
+        existing.trigger_run_id = await dispatchExplanation(
+          database,
+          existing.id,
+          idempotencyKey,
+        )
+        pendingExplanationId = undefined
+      }
+      if (existing.trigger_run_id || existing.status === 'completed') {
+        return jsonNoStore(
+          { explanation: await publicExplanation(existing) },
+          { status: 200 },
+        )
+      }
+      // An interrupted scan without analysis cannot be dispatched safely.
+      await failExplanation(database, {
+        explanationId: existing.id,
+        errorCode: 'generation_dispatch_failed',
+        onlyUndispatched: true,
+      })
     }
     if (existing) {
       idempotencyKey = explanationIdempotencyKey(
@@ -135,11 +190,12 @@ export async function POST(request: Request) {
       userId: session.userId,
       request: resolvedRequest,
       commitSha: snapshot.commitSha,
-      resolvedRef: snapshot.resolvedRef,
+      resolvedRef: resolvedRequest.ref,
       isPrivate: access.isPrivate,
       idempotencyKey,
       scanSummary,
     })
+    if (!explanation.trigger_run_id) pendingExplanationId = explanation.id
     await saveRepositoryScan(database, {
       explanationId: explanation.id,
       selectedFiles: prepared.selectedFiles,
@@ -157,28 +213,19 @@ export async function POST(request: Request) {
     explanation.progress_percent = 60
     explanation.progress_message = 'Storyboard verified; creating artwork'
     if (!explanation.trigger_run_id) {
-      const triggerIdempotencyKey = await idempotencyKeys.create(
+      explanation.trigger_run_id = await dispatchExplanation(
+        database,
+        explanation.id,
         idempotencyKey,
-        { scope: 'global' },
       )
-      const handle = await tasks.trigger<typeof generateComicTask>(
-        'generate-comic',
-        { explanationId: explanation.id },
-        {
-          idempotencyKey: triggerIdempotencyKey,
-          idempotencyKeyTTL: '30d',
-          tags: [`explanation_${explanation.id}`],
-        },
-      )
-      await setExplanationTriggerRun(database, explanation.id, handle.id)
-      explanation.trigger_run_id = handle.id
+      pendingExplanationId = undefined
     }
     await recordAuditEvent(database, {
       explanationId: explanation.id,
       actorUserId: session.userId,
       eventType: 'repository_generation_requested',
       metadata: {
-        ref: snapshot.resolvedRef,
+        ref: parsedRequest.ref ?? snapshot.defaultBranch,
         commitSha: snapshot.commitSha,
         creatorCreditsUsed: false,
       },
@@ -189,6 +236,13 @@ export async function POST(request: Request) {
       { status: 202 },
     )
   } catch (error) {
+    if (pendingExplanationId) {
+      await failExplanation(databaseClient(), {
+        explanationId: pendingExplanationId,
+        errorCode: 'generation_dispatch_failed',
+        onlyUndispatched: true,
+      }).catch(() => undefined)
+    }
     const status = githubRequestStatus(error)
     if (status === 401) {
       return routeErrorResponse(new HttpError(401, 'github_reconnect_required'))

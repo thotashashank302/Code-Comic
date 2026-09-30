@@ -1,41 +1,7 @@
-const reservedRepositorySections = new Set([
-  'about',
-  'account',
-  'apps',
-  'codespaces',
-  'collections',
-  'contact',
-  'customer-stories',
-  'enterprise',
-  'events',
-  'explore',
-  'features',
-  'issues',
-  'login',
-  'marketplace',
-  'new',
-  'notifications',
-  'orgs',
-  'pricing',
-  'pulls',
-  'search',
-  'security',
-  'settings',
-  'signup',
-  'sponsors',
-  'topics',
-])
+import { parseGitHubRepositoryUrl } from '@comic-code/contracts/repository-url'
 
 function readCoordinate() {
-  const segments = window.location.pathname.split('/').filter(Boolean)
-  if (segments.length < 2 || reservedRepositorySections.has(segments[0]!)) {
-    return null
-  }
-  const owner = decodeURIComponent(segments[0]!)
-  const repository = decodeURIComponent(segments[1]!).replace(/\.git$/i, '')
-  if (!owner || !repository) return null
-
-  return { owner, repository }
+  return parseGitHubRepositoryUrl(window.location.href)
 }
 
 function mountExplainButton() {

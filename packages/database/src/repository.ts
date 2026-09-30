@@ -157,10 +157,11 @@ export async function failExplanation(
     explanationId: string
     errorCode: string
     errorDetail?: string
+    onlyUndispatched?: boolean
   },
 ) {
   const errorDetail = input.errorDetail?.slice(0, 4_000) ?? null
-  const { error } = await client
+  let query = client
     .from('explanations')
     .update({
       status: 'failed',
@@ -174,6 +175,10 @@ export async function failExplanation(
     })
     .eq('id', input.explanationId)
     .is('deleted_at', null)
+  if (input.onlyUndispatched) {
+    query = query.is('trigger_run_id', null).neq('status', 'completed')
+  }
+  const { error } = await query
   throwIfError(error)
 }
 
