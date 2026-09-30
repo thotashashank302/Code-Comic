@@ -1,15 +1,12 @@
 import { App } from '@octokit/app'
 import { Octokit } from '@octokit/rest'
-import { createTwoFilesPatch } from 'diff'
 
-import { selectEligibleFiles } from './filters'
 import { maskSecrets } from './secrets'
 import type {
-  ChangedFile,
-  ChangedFileStatus,
-  PreparedFile,
-  PullRequestSnapshot,
+  PreparedRepositoryFile,
   RepositoryCoordinate,
+  RepositorySnapshot,
+  RepositoryTreeFile,
 } from './types'
 
 export type GitHubAppConfig = {
@@ -24,13 +21,6 @@ export function githubRequestStatus(error: unknown) {
   return typeof error.status === 'number' ? error.status : undefined
 }
 
-function normalizeStatus(status: string): ChangedFileStatus {
-  if (status === 'added' || status === 'removed' || status === 'renamed') {
-    return status
-  }
-  return 'modified'
-}
-
 function decodeContent(data: unknown): string {
   if (
     !data ||
@@ -41,7 +31,7 @@ function decodeContent(data: unknown): string {
     typeof data.content !== 'string' ||
     ('size' in data && typeof data.size === 'number' && data.size > 750_000)
   ) {
-    throw new Error('GitHub did not return a text file')
+    throw new Error('GitHub did not return a bounded text file')
   }
 
   return Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString('utf8')
@@ -83,79 +73,6 @@ export class GitHubAppClient {
     return response.data.id
   }
 
-  async getPullRequestSnapshot(
-    coordinate: RepositoryCoordinate,
-    allowPublicFallback = false,
-    fallbackAccessToken?: string,
-  ): Promise<PullRequestSnapshot> {
-    const octokit = await this.getRepositoryOctokit(
-      coordinate.owner,
-      coordinate.repository,
-      allowPublicFallback,
-      fallbackAccessToken,
-    )
-    const response = await octokit.request(
-      'GET /repos/{owner}/{repo}/pulls/{pull_number}',
-      {
-        owner: coordinate.owner,
-        repo: coordinate.repository,
-        pull_number: coordinate.pullRequestNumber,
-      },
-    )
-
-    return {
-      ...coordinate,
-      title: response.data.title,
-      description: response.data.body ?? '',
-      baseSha: response.data.base.sha,
-      headSha: response.data.head.sha,
-      isPrivate: response.data.base.repo.private,
-      htmlUrl: response.data.html_url,
-    }
-  }
-
-  async listChangedFiles(
-    coordinate: RepositoryCoordinate,
-    allowPublicFallback = false,
-    fallbackAccessToken?: string,
-  ) {
-    const octokit = await this.getRepositoryOctokit(
-      coordinate.owner,
-      coordinate.repository,
-      allowPublicFallback,
-      fallbackAccessToken,
-    )
-    const results: ChangedFile[] = []
-    for (let page = 1; ; page += 1) {
-      const response = await octokit.request(
-        'GET /repos/{owner}/{repo}/pulls/{pull_number}/files',
-        {
-          owner: coordinate.owner,
-          repo: coordinate.repository,
-          pull_number: coordinate.pullRequestNumber,
-          per_page: 100,
-          page,
-        },
-      )
-
-      results.push(
-        ...response.data.map((file) => ({
-          path: file.filename,
-          previousPath: file.previous_filename,
-          status: normalizeStatus(file.status),
-          additions: file.additions,
-          deletions: file.deletions,
-          changes: file.changes,
-          blobSha: file.sha,
-          patch: file.patch,
-        })),
-      )
-      if (response.data.length < 100) break
-    }
-
-    return results
-  }
-
   async assertUserCanReadRepository(
     userAccessToken: string,
     owner: string,
@@ -169,9 +86,6 @@ export class GitHubAppClient {
       })
       return { isPrivate: response.data.private }
     } catch (error) {
-      // An expired OAuth token must not make a public repository unusable.
-      // Anonymous access cannot reveal private repositories, so this fallback
-      // does not weaken the private-repository authorization boundary.
       if (githubRequestStatus(error) !== 401) throw error
       try {
         const response = await new Octokit().request(
@@ -185,91 +99,149 @@ export class GitHubAppClient {
     }
   }
 
-  async prepareFiles(input: {
-    coordinate: RepositoryCoordinate
-    baseSha: string
-    headSha: string
-    selectedFiles?: string[]
+  async getRepositorySnapshot(
+    coordinate: RepositoryCoordinate,
+    allowPublicFallback = false,
+    fallbackAccessToken?: string,
+    resolveTreePath = false,
+  ): Promise<RepositorySnapshot> {
+    const octokit = await this.getRepositoryOctokit(
+      coordinate.owner,
+      coordinate.repository,
+      allowPublicFallback,
+      fallbackAccessToken,
+    )
+    const repository = await octokit.request('GET /repos/{owner}/{repo}', {
+      owner: coordinate.owner,
+      repo: coordinate.repository,
+    })
+    let resolvedRef = coordinate.ref ?? repository.data.default_branch
+    const readCommit = (ref: string) =>
+      octokit.request('GET /repos/{owner}/{repo}/commits/{ref}', {
+        owner: coordinate.owner,
+        repo: coordinate.repository,
+        ref,
+      })
+    // A GitHub tree URL can contain both a slash-containing branch and a
+    // directory. Try the longest ref first; only inspection resolves paths.
+    const commit = await (async () => {
+      while (true) {
+        try {
+          return await readCommit(resolvedRef)
+        } catch (error) {
+          const separator = resolvedRef.lastIndexOf('/')
+          if (
+            !resolveTreePath ||
+            githubRequestStatus(error) !== 404 ||
+            separator < 0
+          ) {
+            throw error
+          }
+          resolvedRef = resolvedRef.slice(0, separator)
+        }
+      }
+    })()
+
+    return {
+      owner: repository.data.owner.login,
+      repository: repository.data.name,
+      description: repository.data.description ?? '',
+      defaultBranch: repository.data.default_branch,
+      resolvedRef,
+      commitSha: commit.data.sha,
+      treeSha: commit.data.commit.tree.sha,
+      isPrivate: repository.data.private,
+      htmlUrl: repository.data.html_url,
+    }
+  }
+
+  async listRepositoryFiles(
+    snapshot: RepositorySnapshot,
+    allowPublicFallback = false,
+    fallbackAccessToken?: string,
+  ): Promise<RepositoryTreeFile[]> {
+    const octokit = await this.getRepositoryOctokit(
+      snapshot.owner,
+      snapshot.repository,
+      allowPublicFallback,
+      fallbackAccessToken,
+    )
+    const response = await octokit.request(
+      'GET /repos/{owner}/{repo}/git/trees/{tree_sha}',
+      {
+        owner: snapshot.owner,
+        repo: snapshot.repository,
+        tree_sha: snapshot.treeSha,
+        recursive: '1',
+      },
+    )
+
+    return response.data.tree
+      .filter(
+        (
+          item,
+        ): item is typeof item & {
+          path: string
+          sha: string
+          size: number
+        } =>
+          item.type === 'blob' &&
+          typeof item.path === 'string' &&
+          typeof item.sha === 'string' &&
+          typeof item.size === 'number',
+      )
+      .slice(0, 5_000)
+      .map((item) => ({
+        path: item.path,
+        sha: item.sha,
+        size: item.size,
+      }))
+  }
+
+  async readRepositoryFiles(input: {
+    snapshot: RepositorySnapshot
+    files: RepositoryTreeFile[]
     allowPublicFallback?: boolean
     fallbackAccessToken?: string
-  }): Promise<{ prepared: PreparedFile[]; excluded: string[] }> {
-    const files = await this.listChangedFiles(
-      input.coordinate,
-      input.allowPublicFallback,
-      input.fallbackAccessToken,
-    )
-    const { eligible, excluded } = selectEligibleFiles(
-      files,
-      input.selectedFiles,
-    )
+  }): Promise<PreparedRepositoryFile[]> {
     const octokit = await this.getRepositoryOctokit(
-      input.coordinate.owner,
-      input.coordinate.repository,
+      input.snapshot.owner,
+      input.snapshot.repository,
       input.allowPublicFallback,
       input.fallbackAccessToken,
     )
+    const prepared: PreparedRepositoryFile[] = []
 
-    const prepared = await Promise.all(
-      eligible.map(async (file): Promise<PreparedFile> => {
-        const oldPath = file.previousPath ?? file.path
-        let beforePromise: Promise<string> | undefined
-        let afterPromise: Promise<string> | undefined
-        const before = () =>
-          (beforePromise ??=
-            file.status === 'added'
-              ? Promise.resolve('')
-              : octokit
-                  .request('GET /repos/{owner}/{repo}/contents/{path}', {
-                    owner: input.coordinate.owner,
-                    repo: input.coordinate.repository,
-                    path: oldPath,
-                    ref: input.baseSha,
-                  })
-                  .then((response) => decodeContent(response.data)))
-        const after = () =>
-          (afterPromise ??=
-            file.status === 'removed'
-              ? Promise.resolve('')
-              : octokit
-                  .request('GET /repos/{owner}/{repo}/contents/{path}', {
-                    owner: input.coordinate.owner,
-                    repo: input.coordinate.repository,
-                    path: file.path,
-                    ref: input.headSha,
-                  })
-                  .then((response) => decodeContent(response.data)))
+    for (let index = 0; index < input.files.length; index += 8) {
+      const batch = input.files.slice(index, index + 8)
+      const results = await Promise.all(
+        batch.map(async (file) => {
+          try {
+            const response = await octokit.request(
+              'GET /repos/{owner}/{repo}/contents/{path}',
+              {
+                owner: input.snapshot.owner,
+                repo: input.snapshot.repository,
+                path: file.path,
+                ref: input.snapshot.commitSha,
+              },
+            )
+            return {
+              ...file,
+              maskedSource: maskSecrets(decodeContent(response.data)),
+            }
+          } catch {
+            return null
+          }
+        }),
+      )
+      prepared.push(
+        ...results.filter(
+          (file): file is PreparedRepositoryFile => file !== null,
+        ),
+      )
+    }
 
-        let patch = file.patch
-        if (!patch) {
-          const [beforeContent, afterContent] = await Promise.all([
-            before(),
-            after(),
-          ])
-          patch = createTwoFilesPatch(
-            oldPath,
-            file.path,
-            beforeContent,
-            afterContent,
-            '',
-            '',
-            {
-              context: 4,
-            },
-          )
-        }
-
-        const source = await (
-          file.status === 'removed' ? before() : after()
-        ).catch(() => null)
-        return {
-          ...file,
-          patch,
-          maskedPatch: maskSecrets(patch),
-          maskedSource: source === null ? undefined : maskSecrets(source),
-        }
-      }),
-    )
-
-    return { prepared, excluded }
+    return prepared
   }
 }

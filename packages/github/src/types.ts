@@ -1,59 +1,30 @@
 import type { PersistedEvidenceLocator } from '@comic-code/contracts'
 
-export type RepositoryCoordinate = {
+export { parseGitHubRepositoryUrl } from '@comic-code/contracts'
+export type { RepositoryCoordinate } from '@comic-code/contracts'
+
+export type RepositorySnapshot = {
   owner: string
   repository: string
-  pullRequestNumber: number
-}
-
-export function parseGitHubPullRequestUrl(
-  value: string,
-): RepositoryCoordinate | null {
-  try {
-    const url = new URL(value)
-    if (url.protocol !== 'https:' || url.hostname !== 'github.com') return null
-    const match = url.pathname.match(/^\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/|$)/)
-    if (!match) return null
-    const pullRequestNumber = Number(match[3])
-    if (!Number.isSafeInteger(pullRequestNumber) || pullRequestNumber < 1) {
-      return null
-    }
-    return {
-      owner: decodeURIComponent(match[1]!),
-      repository: decodeURIComponent(match[2]!),
-      pullRequestNumber,
-    }
-  } catch {
-    return null
-  }
-}
-
-export type PullRequestSnapshot = RepositoryCoordinate & {
-  title: string
   description: string
-  baseSha: string
-  headSha: string
+  defaultBranch: string
+  resolvedRef: string
+  commitSha: string
+  treeSha: string
   isPrivate: boolean
   htmlUrl: string
 }
 
-export type ChangedFileStatus = 'added' | 'modified' | 'removed' | 'renamed'
-
-export type ChangedFile = {
+export type RepositoryTreeFile = {
   path: string
-  previousPath?: string
-  status: ChangedFileStatus
-  additions: number
-  deletions: number
-  changes: number
-  blobSha: string | null
-  patch?: string
+  sha: string
+  size: number
 }
 
-export type PreparedFile = ChangedFile & {
-  patch: string
-  maskedPatch: string
-  maskedSource?: string
+export type ChangedFileStatus = 'added' | 'modified' | 'removed' | 'renamed'
+
+export type PreparedRepositoryFile = RepositoryTreeFile & {
+  maskedSource: string
 }
 
 export type TransientEvidence = {
@@ -61,12 +32,13 @@ export type TransientEvidence = {
   maskedText: string
 }
 
-export type PreparedPullRequest = {
-  snapshot: PullRequestSnapshot
-  maskedTitle: string
+export type PreparedRepository = {
+  snapshot: RepositorySnapshot
   maskedDescription: string
   evidence: TransientEvidence[]
   excludedFiles: string[]
+  excludedFileCount: number
   selectedFiles: string[]
-  changedLines: number
+  totalTreeFiles: number
+  scannedCharacters: number
 }

@@ -31,8 +31,8 @@ For a private repository, invite both required judging addresses listed by Devpo
 
 ## Final technical proof
 
-- Public PR works without app installation.
-- Private PR works only for an authorized user and installed repository.
+- Public repository works without app installation.
+- Private repository works only for an authorized user and installed repository.
 - Browser extension ZIP installs in a clean profile.
 - Hosted demo works in a clean browser session.
 - Production audit has no known vulnerabilities.

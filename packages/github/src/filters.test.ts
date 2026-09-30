@@ -1,28 +1,38 @@
 import { describe, expect, it } from 'vitest'
 
-import { exclusionReason, selectEligibleFiles } from './filters'
+import {
+  exclusionReason,
+  scoreRepositoryFile,
+  selectRepositoryFiles,
+} from './filters'
 
-describe('code-only pull request filtering', () => {
-  it('excludes documentation formats from executable-code analysis', () => {
+describe('repository architecture filtering', () => {
+  it('keeps README context but excludes unrelated documentation and secrets', () => {
+    expect(exclusionReason('README.md')).toBeNull()
     expect(exclusionReason('docs/guide.mdx')).toBe('documentation')
-    expect(exclusionReason('README.md')).toBe('documentation')
+    expect(exclusionReason('.env.production')).toBe('sensitive-file')
     expect(exclusionReason('src/route.ts')).toBeNull()
   })
 
-  it('does not present a documentation-only pull request as code', () => {
-    const selected = selectEligibleFiles([
-      {
-        path: 'docs/guide.mdx',
-        status: 'modified',
-        additions: 1,
-        deletions: 0,
-        changes: 1,
-        blobSha: 'a'.repeat(40),
-        patch: '@@ -1 +1 @@\n-old\n+new',
-      },
-    ])
+  it('prioritizes manifests and entrypoints across the repository', () => {
+    const files = [
+      { path: 'docs/guide.md', sha: 'a', size: 100 },
+      { path: 'src/utils/tiny.ts', sha: 'b', size: 100 },
+      { path: 'src/server.ts', sha: 'c', size: 2_000 },
+      { path: 'package.json', sha: 'd', size: 1_000 },
+      { path: 'README.md', sha: 'e', size: 2_000 },
+    ]
+    const result = selectRepositoryFiles(files, 4)
 
-    expect(selected.eligible).toHaveLength(0)
-    expect(selected.excluded).toEqual(['docs/guide.mdx'])
+    expect(result.selected.map((file) => file.path)).toEqual([
+      'README.md',
+      'package.json',
+      'src/server.ts',
+      'src/utils/tiny.ts',
+    ])
+    expect(result.excluded).toEqual(['docs/guide.md'])
+    expect(scoreRepositoryFile(files[4]!)).toBeGreaterThan(
+      scoreRepositoryFile(files[1]!),
+    )
   })
 })

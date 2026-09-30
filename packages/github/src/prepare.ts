@@ -1,14 +1,21 @@
 import { createHash } from 'node:crypto'
 
-import { createSourceFileEvidence, splitPatchIntoEvidence } from './evidence'
+import { maxPersistedExcludedFiles } from '@comic-code/contracts'
+
+import { createSourceFileEvidence } from './evidence'
 import { GitHubAppClient } from './client'
+import { isManifestPath, isReadmePath, selectRepositoryFiles } from './filters'
 import { maskSecrets } from './secrets'
-import type { PreparedPullRequest, RepositoryCoordinate } from './types'
+import type {
+  PreparedRepository,
+  RepositoryCoordinate,
+  TransientEvidence,
+} from './types'
 
 function metadataEvidence(
-  source: 'pull_request_title' | 'pull_request_description',
+  source: 'repository_name' | 'repository_description' | 'directory_structure',
   text: string,
-) {
+): TransientEvidence {
   const contentHash = createHash('sha256').update(text).digest('hex')
   return {
     locator: {
@@ -17,91 +24,103 @@ function metadataEvidence(
       contentHash,
     },
     maskedText: text,
-  } as const
+  }
 }
 
-export async function preparePullRequest(input: {
+export async function prepareRepository(input: {
   client: GitHubAppClient
   coordinate: RepositoryCoordinate
-  expectedHeadSha: string
-  selectedFiles?: string[]
+  expectedCommitSha: string
   allowPublicFallback?: boolean
   fallbackAccessToken?: string
-}): Promise<PreparedPullRequest> {
-  const snapshot = await input.client.getPullRequestSnapshot(
-    input.coordinate,
+}): Promise<PreparedRepository> {
+  const resolvedSnapshot = await input.client.getRepositorySnapshot(
+    { ...input.coordinate, ref: input.expectedCommitSha },
     input.allowPublicFallback,
     input.fallbackAccessToken,
   )
-  if (snapshot.headSha !== input.expectedHeadSha) {
-    throw new Error('The pull request head changed before generation started')
+  if (
+    resolvedSnapshot.commitSha.toLowerCase() !==
+    input.expectedCommitSha.toLowerCase()
+  ) {
+    throw new Error('The repository ref changed before generation started')
+  }
+  const snapshot = {
+    ...resolvedSnapshot,
+    resolvedRef: input.coordinate.ref ?? resolvedSnapshot.defaultBranch,
   }
 
-  const { prepared, excluded } = await input.client.prepareFiles({
-    coordinate: input.coordinate,
-    baseSha: snapshot.baseSha,
-    headSha: snapshot.headSha,
-    selectedFiles: input.selectedFiles,
+  const tree = await input.client.listRepositoryFiles(
+    snapshot,
+    input.allowPublicFallback,
+    input.fallbackAccessToken,
+  )
+  const { selected, excluded } = selectRepositoryFiles(tree)
+  const prepared = await input.client.readRepositoryFiles({
+    snapshot,
+    files: selected,
     allowPublicFallback: input.allowPublicFallback,
     fallbackAccessToken: input.fallbackAccessToken,
   })
-
-  const changedLines = prepared.reduce((sum, file) => sum + file.changes, 0)
-  if (changedLines > 3_000) {
-    throw new Error('Selected files exceed the 3,000 changed-line limit')
+  if (prepared.length === 0) {
+    throw new Error('The repository has no readable executable source')
   }
 
-  const maskedTitle = maskSecrets(snapshot.title)
-  const maskedDescription = maskSecrets(snapshot.description)
-  const sourceCharacterBudget = 90_000
+  const sourceCharacterBudget = 150_000
   const perFileCharacterBudget = Math.max(
-    4_500,
-    Math.min(24_000, Math.floor(sourceCharacterBudget / prepared.length)),
+    2_500,
+    Math.min(12_000, Math.floor(sourceCharacterBudget / prepared.length)),
   )
   const codeEvidence = prepared.flatMap((file) => {
-    const diffEvidence = splitPatchIntoEvidence({
+    const evidence = createSourceFileEvidence({
       path: file.path,
-      oldPath: file.previousPath,
-      status: file.status,
-      maskedPatch: file.maskedPatch,
-    })
-    const sourceEvidence = createSourceFileEvidence({
-      path: file.path,
-      oldPath: file.previousPath,
-      status: file.status,
+      status: 'modified',
       maskedSource: file.maskedSource,
-      diffEvidence,
+      diffEvidence: [],
       maxCharacters: perFileCharacterBudget,
     })
-    return sourceEvidence.length > 0 ? sourceEvidence : diffEvidence
+    const source = isReadmePath(file.path)
+      ? ('readme' as const)
+      : isManifestPath(file.path)
+        ? ('manifest' as const)
+        : ('source_file' as const)
+    return evidence.map((item) => ({
+      ...item,
+      locator: { ...item.locator, source },
+    }))
   })
+  const maskedDescription = maskSecrets(snapshot.description)
+  const directorySummary = selected
+    .map((file) => file.path)
+    .slice(0, 120)
+    .join('\n')
   const metadata = [
-    metadataEvidence('pull_request_title', maskedTitle),
+    metadataEvidence(
+      'repository_name',
+      `${snapshot.owner}/${snapshot.repository}`,
+    ),
     ...(maskedDescription.trim()
-      ? [metadataEvidence('pull_request_description', maskedDescription)]
+      ? [metadataEvidence('repository_description', maskedDescription)]
       : []),
+    metadataEvidence('directory_structure', directorySummary),
   ]
   const evidence = [
     ...metadata,
     ...codeEvidence.slice(0, 200 - metadata.length),
   ]
 
-  if (
-    !codeEvidence.some(
-      (item) =>
-        item.locator.source === 'source_file' || item.locator.source === 'diff',
-    )
-  ) {
-    throw new Error('The pull request has no executable code evidence')
-  }
-
   return {
     snapshot,
-    maskedTitle,
     maskedDescription,
     evidence,
-    excludedFiles: excluded,
+    excludedFiles: excluded.slice(0, maxPersistedExcludedFiles),
+    excludedFileCount: excluded.length,
     selectedFiles: prepared.map((file) => file.path),
-    changedLines,
+    totalTreeFiles: tree.length,
+    scannedCharacters: prepared.reduce(
+      (total, file) =>
+        total + Math.min(file.maskedSource.length, perFileCharacterBudget),
+      0,
+    ),
   }
 }

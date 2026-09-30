@@ -9,10 +9,10 @@ export type AnalysisEvidence = {
 }
 
 export type AnalysisInput = {
-  title: string
+  repository: string
   description: string
-  baseSha: string
-  headSha: string
+  ref: string
+  commitSha: string
   evidence: AnalysisEvidence[]
   excludedFiles: string[]
   safetyIdentifier: string

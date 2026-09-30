@@ -8,31 +8,26 @@ import { BrandMark } from '@/components/brand-mark'
 import { Storyboard } from '@/components/storyboard'
 
 type User = { id: string; login: string; avatarUrl: string | null }
-type PullRequestFile = {
-  path: string
-  status: string
-  additions: number
-  deletions: number
-  changes: number
-}
-type PullRequest = {
+type Repository = {
   owner: string
   repository: string
-  pullRequestNumber: number
-  title: string
+  description: string
   htmlUrl: string
   isPrivate: boolean
-  baseSha: string
-  headSha: string
-  files: PullRequestFile[]
+  defaultBranch: string
+  ref: string
+  commitSha: string
+  totalFiles: number
+  selectedFileCount: number
   excludedFileCount: number
-  selectedChangedLines: number
+  representativeFiles: string[]
+  languages: string[]
 }
 type Explanation = {
   id: string
   repository: string
-  pullRequestNumber: number
-  headSha: string
+  ref: string
+  commitSha: string
   status: string
   progress: { percent: number; message: string; updatedAt: string }
   analysis: ComicAnalysis | null
@@ -54,15 +49,13 @@ function friendlyError(code: string) {
   }
   const messages: Record<string, string> = {
     authentication_required: 'Connect GitHub to continue.',
-    invalid_pull_request_url: 'Paste a full GitHub pull request URL.',
-    pull_request_changed:
-      'The pull request changed. Refresh it before generating.',
-    change_too_large: 'Choose a smaller set: the limit is 3,000 changed lines.',
+    invalid_repository_url: 'Paste a full GitHub repository URL.',
+    repository_changed:
+      'The repository branch moved. Inspect it again before generating.',
     daily_quota_reached:
       'Daily safety limit is 25 comics. Try again after 24 hours.',
-    no_eligible_files: 'This pull request has no safe text files to explain.',
     no_executable_code:
-      'This pull request changes documentation or unsupported files, not executable code. Choose a PR with source-code changes.',
+      'This repository has no safe, readable source files to explain.',
     github_reconnect_required:
       'Your GitHub login expired. Reconnect GitHub, then try again.',
     github_access_denied:
@@ -93,21 +86,33 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
     cache: 'no-store',
     headers: { 'Content-Type': 'application/json', ...init?.headers },
   })
-  const data = (await response.json()) as T & {
+  const responseText = await response.text()
+  const data = (
+    responseText
+      ? (() => {
+          try {
+            return JSON.parse(responseText) as T
+          } catch {
+            return {} as T
+          }
+        })()
+      : ({} as T)
+  ) as T & {
     error?: string
     detail?: string
   }
   if (!response.ok)
-    throw new Error(data.detail ?? data.error ?? 'request_failed')
+    throw new Error(
+      data.detail ?? data.error ?? `request_failed_${response.status}`,
+    )
   return data
 }
 
 export function ComicCodeApp() {
   const [user, setUser] = useState<User | null>(null)
   const [authChecked, setAuthChecked] = useState(false)
-  const [pullRequestUrl, setPullRequestUrl] = useState('')
-  const [pullRequest, setPullRequest] = useState<PullRequest | null>(null)
-  const [selectedFiles, setSelectedFiles] = useState<string[]>([])
+  const [repositoryUrl, setRepositoryUrl] = useState('')
+  const [repository, setRepository] = useState<Repository | null>(null)
   const [explanation, setExplanation] = useState<Explanation | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -162,21 +167,27 @@ export function ComicCodeApp() {
     }
   }, [activeExplanationId, activeStatus])
 
-  const inspectPullRequest = async () => {
+  const inspectRepository = async () => {
     if (!user) {
-      window.location.assign('/api/v1/auth/github/start?return_to=/')
+      // OAuth needs a full browser navigation so the GitHub redirect can leave the app.
+      window.location.assign(
+        new URL(
+          '/api/v1/auth/github/start?return_to=/',
+          window.location.origin,
+        ),
+      )
       return
     }
     setBusy(true)
     setError(null)
+    setRepository(null)
     setExplanation(null)
     setAiGenerationRequested(false)
     try {
-      const result = await api<{ pullRequest: PullRequest }>(
-        `/api/v1/github/pull-request?url=${encodeURIComponent(pullRequestUrl)}`,
+      const result = await api<{ repository: Repository }>(
+        `/api/v1/github/repository?url=${encodeURIComponent(repositoryUrl)}`,
       )
-      setPullRequest(result.pullRequest)
-      setSelectedFiles(result.pullRequest.files.map((file) => file.path))
+      setRepository(result.repository)
     } catch (caught) {
       pendingCloudflare.current = false
       setAiGenerationRequested(false)
@@ -190,16 +201,8 @@ export function ComicCodeApp() {
     }
   }
 
-  const toggleFile = (path: string) => {
-    setSelectedFiles((current) =>
-      current.includes(path)
-        ? current.filter((candidate) => candidate !== path)
-        : [...current, path],
-    )
-  }
-
   const generate = async () => {
-    if (!pullRequest || selectedFiles.length === 0) return
+    if (!repository) return
     setBusy(true)
     setError(null)
     pendingCloudflare.current = cloudflareReady
@@ -210,11 +213,10 @@ export function ComicCodeApp() {
         {
           method: 'POST',
           body: JSON.stringify({
-            owner: pullRequest.owner,
-            repository: pullRequest.repository,
-            pullRequestNumber: pullRequest.pullRequestNumber,
-            headSha: pullRequest.headSha,
-            selectedFiles,
+            owner: repository.owner,
+            repository: repository.repository,
+            ref: repository.ref,
+            commitSha: repository.commitSha,
             forceRegenerate: Boolean(explanation),
           }),
         },
@@ -343,14 +345,14 @@ export function ComicCodeApp() {
 
       <section className="hero" id="top">
         <div className="hero__copy">
-          <span className="eyebrow">Pull requests · translated visually</span>
+          <span className="eyebrow">Repositories · translated visually</span>
           <h1>
             See what the code <em>means.</em>
           </h1>
           <p>
-            Comic Code turns selected source code in a GitHub pull request into
-            a grounded four-panel story anyone can understand—without exposing
-            source in storage.
+            Comic Code maps a GitHub repository and turns how its major parts
+            work together into a grounded four-panel story anyone can
+            understand—without exposing source in storage.
           </p>
           <div className="trust-row">
             <span>Read-only GitHub App</span>
@@ -367,29 +369,29 @@ export function ComicCodeApp() {
         <div className="workspace__header">
           <div>
             <span className="eyebrow">Try the hosted demo</span>
-            <h2 id="workspace-title">Explain a pull request</h2>
+            <h2 id="workspace-title">Explain a repository</h2>
           </div>
           <span className="step-label">01 · Connect</span>
         </div>
 
         <div className="url-control">
-          <label htmlFor="pull-request-url">GitHub pull request URL</label>
+          <label htmlFor="repository-url">GitHub repository URL</label>
           <div>
             <input
-              id="pull-request-url"
+              id="repository-url"
               type="url"
-              value={pullRequestUrl}
-              onChange={(event) => setPullRequestUrl(event.target.value)}
-              placeholder="https://github.com/owner/repository/pull/123"
+              value={repositoryUrl}
+              onChange={(event) => setRepositoryUrl(event.target.value)}
+              placeholder="https://github.com/owner/repository"
               autoComplete="url"
             />
             <button
               className="primary-button"
               type="button"
-              onClick={inspectPullRequest}
-              disabled={busy || !pullRequestUrl.trim()}
+              onClick={inspectRepository}
+              disabled={busy || !repositoryUrl.trim()}
             >
-              {user ? 'Inspect PR' : 'Connect GitHub'}
+              {user ? 'Inspect repository' : 'Connect GitHub'}
             </button>
           </div>
         </div>
@@ -403,48 +405,42 @@ export function ComicCodeApp() {
           </div>
         ) : null}
 
-        {pullRequest ? (
+        {repository ? (
           <div className="pr-card">
             <header>
               <div>
                 <span className="repo-name">
-                  {pullRequest.owner}/{pullRequest.repository} · #
-                  {pullRequest.pullRequestNumber}
+                  {repository.owner}/{repository.repository} · {repository.ref}
                 </span>
-                <h3>{pullRequest.title}</h3>
+                <h3>
+                  {repository.description || 'Repository architecture scan'}
+                </h3>
               </div>
               <span className="privacy-pill">
-                {pullRequest.isPrivate ? 'Private' : 'Public'}
+                {repository.isPrivate ? 'Private' : 'Public'}
               </span>
             </header>
             <div
               className="file-list"
-              aria-label="Files selected for explanation"
+              aria-label="Representative files selected automatically"
             >
-              {pullRequest.files.map((file) => (
-                <label className="file-row" key={file.path}>
-                  <input
-                    type="checkbox"
-                    checked={selectedFiles.includes(file.path)}
-                    onChange={() => toggleFile(file.path)}
-                  />
-                  <code>{file.path}</code>
-                  <span className="diff-count">
-                    <b>+{file.additions}</b> −{file.deletions}
-                  </span>
-                </label>
+              {repository.representativeFiles.map((path) => (
+                <div className="file-row" key={path}>
+                  <code>{path}</code>
+                </div>
               ))}
             </div>
             <footer>
               <span>
-                {selectedFiles.length} source files selected · current PR-head
-                code will be analyzed
+                {repository.selectedFileCount} representative files from{' '}
+                {repository.totalFiles} repository files · commit{' '}
+                {repository.commitSha.slice(0, 7)}
               </span>
               <button
                 className="primary-button primary-button--amber"
                 type="button"
                 onClick={generate}
-                disabled={busy || selectedFiles.length === 0}
+                disabled={busy}
               >
                 {busy
                   ? 'Preparing source preview…'
@@ -462,7 +458,7 @@ export function ComicCodeApp() {
           </div>
         ) : null}
 
-        {pullRequest ? (
+        {repository ? (
           <section
             className="byok-card"
             aria-labelledby="cloudflare-setup-title"
@@ -631,7 +627,10 @@ export function ComicCodeApp() {
 
       <footer className="site-footer">
         <BrandMark compact />
-        <p>Comic Code · Grounded AI explanations for people beyond the diff.</p>
+        <p>
+          Comic Code · Grounded repository explanations for people who do not
+          code.
+        </p>
       </footer>
     </main>
   )

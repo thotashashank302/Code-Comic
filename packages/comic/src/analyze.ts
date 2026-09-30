@@ -4,6 +4,7 @@ import {
   comicAnalysisDraftSchema,
   comicAnalysisSchema,
   comicPanelSchema,
+  maxPersistedExcludedFiles,
 } from '@comic-code/contracts'
 import OpenAI from 'openai'
 import { zodTextFormat } from 'openai/helpers/zod'
@@ -151,7 +152,10 @@ export function buildVerifiedComicAnalysis(input: {
     panels,
     claims,
     evidence: input.analysisInput.evidence.map((evidence) => evidence.locator),
-    excludedFiles: input.analysisInput.excludedFiles,
+    excludedFiles: input.analysisInput.excludedFiles.slice(
+      0,
+      maxPersistedExcludedFiles,
+    ),
   })
 }
 

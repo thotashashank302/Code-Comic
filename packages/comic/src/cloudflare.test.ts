@@ -75,10 +75,10 @@ describe('Cloudflare BYOK code analysis', () => {
 
     const result = await analyzeCloudflareComic(
       {
-        title: 'Validate the handler',
+        repository: 'owner/example',
         description: '',
-        baseSha: 'a'.repeat(40),
-        headSha: 'b'.repeat(40),
+        ref: 'main',
+        commitSha: 'b'.repeat(40),
         excludedFiles: [],
         safetyIdentifier: 'safe-user',
         evidence: [
@@ -117,6 +117,198 @@ describe('Cloudflare BYOK code analysis', () => {
       json_schema: { type: 'object' },
     })
     expect(JSON.stringify(requests)).not.toContain('workers-ai-secret-token')
-    expect(cloudflareAnalysisModel).toBe('@cf/meta/llama-3.1-8b-instruct-fast')
+    expect(cloudflareAnalysisModel).toBe(
+      '@cf/meta/llama-4-scout-17b-16e-instruct',
+    )
+  })
+
+  it('retries malformed structured output in JSON-object mode', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const claimIds = ['claim-1', 'claim-2', 'claim-3', 'claim-4']
+    const draft = {
+      plainLanguageSummary: 'A repository accepts, checks, and processes work.',
+      metaphor: 'A guarded workshop.',
+      sharedVisualStyle: 'Simple editorial workshop scenes.',
+      panels: claimIds.map((claimId, index) => ({
+        sequence: index + 1,
+        purpose: ['overview', 'components', 'flow', 'outcome'][index],
+        title: `Panel ${index + 1}`,
+        caption: `Supported repository behavior ${index + 1}.`,
+        scenePrompt: `A workshop scene ${index + 1} without text.`,
+        claimIds: [claimId],
+        confidence: 'high',
+        uncertaintyNote: null,
+      })),
+      claims: claimIds.map((id) => ({
+        id,
+        text: 'The cited source supports this behavior.',
+        support: 'direct',
+        evidenceIds: ['ev_source'],
+        confidence: 'high',
+      })),
+      uncertainties: [],
+    }
+    const verification = {
+      results: claimIds.map((claimId) => ({
+        claimId,
+        verdict: 'direct',
+        reason: 'Supported by cited source.',
+      })),
+    }
+    const requests: Array<Record<string, unknown>> = []
+    vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(async (_url, init) => {
+        requests.push(JSON.parse(String(init?.body)))
+        return Response.json({
+          success: true,
+          result: { response: 'not-json' },
+        })
+      })
+      .mockImplementationOnce(async (_url, init) => {
+        requests.push(JSON.parse(String(init?.body)))
+        return Response.json({
+          success: true,
+          result: { response: draft },
+        })
+      })
+      .mockImplementationOnce(async (_url, init) => {
+        requests.push(JSON.parse(String(init?.body)))
+        return Response.json({
+          success: true,
+          result: { response: verification },
+        })
+      })
+
+    await analyzeCloudflareComic(
+      {
+        repository: 'owner/example',
+        description: '',
+        ref: 'main',
+        commitSha: 'b'.repeat(40),
+        excludedFiles: [],
+        safetyIdentifier: 'safe-user',
+        evidence: [
+          {
+            locator: {
+              id: 'ev_source',
+              source: 'source_file',
+              filePath: 'src/index.ts',
+              status: 'modified',
+              contentHash: 'c'.repeat(64),
+            },
+            maskedText: '1: export function run() { return true }',
+          },
+        ],
+      },
+      {
+        accountId: 'd'.repeat(32),
+        apiToken: 'workers-ai-secret-token',
+      },
+    )
+
+    expect(requests).toHaveLength(3)
+    expect(requests[1]?.response_format).toEqual({ type: 'json_object' })
+  })
+
+  it('repairs verbatim output without resending repository evidence', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const source =
+      'const customerConnection = createConnection(accountIdentifier)'
+    const claimIds = ['claim-1', 'claim-2', 'claim-3', 'claim-4']
+    const draft = {
+      plainLanguageSummary: `It runs ${source}`,
+      metaphor: 'A guarded workshop.',
+      sharedVisualStyle: 'Simple editorial workshop scenes.',
+      panels: claimIds.map((claimId, index) => ({
+        sequence: index + 1,
+        purpose: ['overview', 'components', 'flow', 'outcome'][index],
+        title: `Panel ${index + 1}`,
+        caption: `Supported repository behavior ${index + 1}.`,
+        scenePrompt: `A workshop scene ${index + 1} without text.`,
+        claimIds: [claimId],
+        confidence: 'high',
+        uncertaintyNote: null,
+      })),
+      claims: claimIds.map((id) => ({
+        id,
+        text: 'The cited source supports this behavior.',
+        support: 'direct',
+        evidenceIds: ['ev_source'],
+        confidence: 'high',
+      })),
+      uncertainties: [],
+    }
+    const repaired = {
+      ...draft,
+      plainLanguageSummary:
+        'The repository prepares a private connection for an account.',
+    }
+    const verification = {
+      results: claimIds.map((claimId) => ({
+        claimId,
+        verdict: 'direct',
+        reason: 'Supported by cited source.',
+      })),
+    }
+    const requests: Array<Record<string, unknown>> = []
+    vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(async (_url, init) => {
+        requests.push(JSON.parse(String(init?.body)))
+        return Response.json({
+          success: true,
+          result: { response: draft },
+        })
+      })
+      .mockImplementationOnce(async (_url, init) => {
+        requests.push(JSON.parse(String(init?.body)))
+        return Response.json({
+          success: true,
+          result: { response: repaired },
+        })
+      })
+      .mockImplementationOnce(async (_url, init) => {
+        requests.push(JSON.parse(String(init?.body)))
+        return Response.json({
+          success: true,
+          result: { response: verification },
+        })
+      })
+
+    await analyzeCloudflareComic(
+      {
+        repository: 'owner/example',
+        description: '',
+        ref: 'main',
+        commitSha: 'b'.repeat(40),
+        excludedFiles: [],
+        safetyIdentifier: 'safe-user',
+        evidence: [
+          {
+            locator: {
+              id: 'ev_source',
+              source: 'source_file',
+              filePath: 'src/index.ts',
+              status: 'modified',
+              contentHash: 'c'.repeat(64),
+            },
+            maskedText: source,
+          },
+        ],
+      },
+      {
+        accountId: 'd'.repeat(32),
+        apiToken: 'workers-ai-secret-token',
+      },
+    )
+
+    expect(requests).toHaveLength(3)
+    const repairInput = JSON.parse(
+      String(
+        (requests[1]?.messages as Array<{ role: string; content: string }>)[1]
+          ?.content,
+      ),
+    )
+    expect(repairInput).toHaveProperty('rejectedStoryboard')
+    expect(repairInput).not.toHaveProperty('evidence')
   })
 })

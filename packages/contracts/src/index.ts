@@ -1,15 +1,18 @@
 import { z } from 'zod'
 
+export * from './repository-url'
+
+export const maxPersistedExcludedFiles = 500
+
 export const repositoryCoordinateSchema = z.object({
   owner: z.string().trim().min(1).max(100),
   repository: z.string().trim().min(1).max(100),
-  pullRequestNumber: z.number().int().positive(),
+  ref: z.string().trim().min(1).max(255).optional(),
 })
 
 export const createExplanationRequestSchema = repositoryCoordinateSchema.extend(
   {
-    headSha: z.string().regex(/^[a-f0-9]{40}$/i),
-    selectedFiles: z.array(z.string().min(1).max(1_024)).max(20).optional(),
+    commitSha: z.string().regex(/^[a-f0-9]{40}$/i),
     forceRegenerate: z.boolean().default(false),
   },
 )
@@ -19,6 +22,12 @@ export type CreateExplanationRequest = z.infer<
 >
 
 export const evidenceSourceSchema = z.enum([
+  'repository_name',
+  'repository_description',
+  'readme',
+  'manifest',
+  'directory_structure',
+  // Retained so existing explanations remain readable during migration.
   'diff',
   'code_context',
   'source_file',
@@ -90,7 +99,7 @@ export type ComicAnalysisDraft = z.infer<typeof comicAnalysisDraftSchema>
 
 export const comicAnalysisSchema = comicAnalysisDraftSchema.extend({
   evidence: z.array(persistedEvidenceLocatorSchema).min(1).max(200),
-  excludedFiles: z.array(z.string().max(1_024)).max(500),
+  excludedFiles: z.array(z.string().max(1_024)).max(maxPersistedExcludedFiles),
   generationMode: z
     .enum(['openai', 'cloudflare_byok', 'deterministic_fallback'])
     .optional(),

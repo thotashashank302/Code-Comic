@@ -33,9 +33,9 @@ export function githubClient() {
 export function explanationIdempotencyKey(
   userId: string,
   request: CreateExplanationRequest,
+  commitSha: string,
 ) {
   const env = getServerEnv()
-  const selectedFiles = [...(request.selectedFiles ?? [])].sort()
   const forceNonce = request.forceRegenerate ? randomUUID() : 'stable'
   return createHmac('sha256', env.SAFETY_IDENTIFIER_SECRET)
     .update(
@@ -43,9 +43,9 @@ export function explanationIdempotencyKey(
         userId,
         owner: request.owner.toLowerCase(),
         repository: request.repository.toLowerCase(),
-        pullRequestNumber: request.pullRequestNumber,
-        headSha: request.headSha.toLowerCase(),
-        selectedFiles,
+        ref: request.ref ?? null,
+        commitSha: commitSha.toLowerCase(),
+        scannerVersion: 1,
         forceNonce,
       }),
     )
@@ -75,8 +75,9 @@ export async function publicExplanation(row: ExplanationRow) {
   return {
     id: row.id,
     repository: `${row.github_owner}/${row.github_repository}`,
-    pullRequestNumber: row.pull_request_number,
-    headSha: row.head_sha,
+    ref: row.repository_ref,
+    commitSha: row.commit_sha,
+    scanSummary: row.scan_summary,
     status: row.status,
     progress: {
       percent: row.progress_percent,

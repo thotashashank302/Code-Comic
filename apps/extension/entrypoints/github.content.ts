@@ -1,19 +1,7 @@
-const pullRequestPath = /^\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/|$)/
+import { parseGitHubRepositoryUrl } from '@comic-code/contracts/repository-url'
 
 function readCoordinate() {
-  const match = window.location.pathname.match(pullRequestPath)
-  if (!match) return null
-
-  const pullRequestNumber = Number(match[3])
-  if (!Number.isSafeInteger(pullRequestNumber) || pullRequestNumber < 1) {
-    return null
-  }
-
-  return {
-    owner: match[1]!,
-    repository: match[2]!,
-    pullRequestNumber,
-  }
+  return parseGitHubRepositoryUrl(window.location.href)
 }
 
 function mountExplainButton() {
@@ -26,14 +14,13 @@ function mountExplainButton() {
     existing?.remove()
     return
   }
-
   if (existing) return
 
   const button = document.createElement('button')
   button.type = 'button'
   button.dataset.comicCodeTrigger = 'true'
   button.className = 'Button--primary Button--medium Button'
-  button.textContent = 'Explain PR'
+  button.textContent = 'Explain Repository'
   button.addEventListener('click', () => {
     void chrome.runtime.sendMessage({
       type: 'comic-code:open-sidepanel',
@@ -42,10 +29,9 @@ function mountExplainButton() {
   })
 
   const target =
-    document.querySelector('.gh-header-actions') ??
-    document.querySelector('[data-testid="pull-request-header"]') ??
+    document.querySelector('[data-testid="repository-overview"]') ??
+    document.querySelector('.file-navigation') ??
     document.querySelector('main')
-
   target?.prepend(button)
 }
 
@@ -54,15 +40,22 @@ export default defineContentScript({
   runAt: 'document_idle',
   main() {
     let currentHref = window.location.href
-    mountExplainButton()
-
-    const observer = new MutationObserver(() => {
+    let scheduled = false
+    const refresh = () => {
+      scheduled = false
       if (window.location.href !== currentHref) {
         currentHref = window.location.href
+        document.querySelector('[data-comic-code-trigger]')?.remove()
       }
       mountExplainButton()
+    }
+    const observer = new MutationObserver(() => {
+      if (scheduled) return
+      scheduled = true
+      window.requestAnimationFrame(refresh)
     })
 
+    refresh()
     observer.observe(document.documentElement, {
       childList: true,
       subtree: true,

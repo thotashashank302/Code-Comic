@@ -8,11 +8,6 @@ export default defineBackground(() => {
       comicCodeCoordinate: message.coordinate,
     })
 
-    void chrome.sidePanel.setOptions({
-      tabId: sender.tab.id,
-      path: 'sidepanel.html',
-      enabled: true,
-    })
     void chrome.sidePanel.open({ tabId: sender.tab.id })
   })
 

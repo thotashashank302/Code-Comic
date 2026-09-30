@@ -1,9 +1,12 @@
 import type { ComicAnalysis } from '@comic-code/contracts'
-import { comicAnalysisSchema } from '@comic-code/contracts'
+import {
+  comicAnalysisSchema,
+  maxPersistedExcludedFiles,
+} from '@comic-code/contracts'
 
 import type { AnalysisEvidence, AnalysisInput } from './types'
 
-const fallbackAnalysisModel = 'deterministic-source-scan-v4'
+const fallbackAnalysisModel = 'deterministic-source-scan-v5'
 const fallbackImageModel = 'storyboard-fallback-v1'
 
 export const deterministicFallbackModels = {
@@ -130,6 +133,31 @@ function fixedList(values: string[]) {
   return `${values[0]}, ${values[1]}, and ${values[2]}`
 }
 
+const plainFeatureNames: Record<string, string> = {
+  'module dependencies': 'connects several building blocks',
+  'function and method logic': 'carries out defined jobs',
+  'data shapes and classes': 'organizes information into known forms',
+  'branching decisions': 'chooses what should happen next',
+  iteration: 'processes groups of items',
+  'asynchronous operations':
+    'waits for longer work without blocking everything',
+  'error handling': 'catches problems and follows a safe path',
+  'input validation': 'checks information before using it',
+  'network requests': 'talks to another online service',
+  'database operations': 'reads or saves stored information',
+  'interface state and events': 'responds to people and updates what they see',
+  'automated tests': 'checks that expected behavior still works',
+  'access and security checks':
+    'checks identity or permission before continuing',
+}
+
+function plainFeatureList(features: string[]) {
+  if (features.length === 0) return 'performs general executable work'
+  return fixedList(
+    features.map((feature) => plainFeatureNames[feature] ?? feature),
+  )
+}
+
 function buildCodeProfile(evidence: AnalysisEvidence[]) {
   let inspectedLines = 0
   const languages = new Set<string>()
@@ -192,9 +220,9 @@ function runtimeStory(profile: CodeProfile) {
     'iteration',
   ].filter((feature) => profile.features.includes(feature))
   if (selected.length === 0) {
-    return 'Selected source contains executable structure without a detected common runtime pattern.'
+    return 'The selected code performs work, but local scanning cannot safely describe its full journey.'
   }
-  return `Selected code connects ${fixedList(selected.slice(0, 3))} in its execution path.`
+  return `When activated, this code ${plainFeatureList(selected.slice(0, 3))}.`
 }
 
 export function createDeterministicComicAnalysis(
@@ -203,6 +231,7 @@ export function createDeterministicComicAnalysis(
   const codeEvidence = input.evidence.filter(
     (evidence) =>
       evidence.locator.source === 'source_file' ||
+      evidence.locator.source === 'manifest' ||
       evidence.locator.source === 'code_context' ||
       evidence.locator.source === 'diff',
   )
@@ -242,7 +271,7 @@ export function createDeterministicComicAnalysis(
   const codeFeatures = narrativeFeatureOrder
     .filter((feature) => codeProfile.features.includes(feature))
     .slice(0, 3)
-  const codeFeatureSummary = fixedList(codeFeatures)
+  const codeFeatureSummary = plainFeatureList(codeFeatures)
   const runtimeSummary = runtimeStory(codeProfile)
   const scopeSummary = codeScope(codeProfile, Math.max(paths.length, 1))
   const featureEvidenceIds = codeProfile.evidenceFor(
@@ -254,7 +283,7 @@ export function createDeterministicComicAnalysis(
     {
       id: 'fallback-claim-1',
       text: hasCode
-        ? `Local structural scan inspected ${scopeSummary}.`
+        ? `This preview inspected ${scopeSummary} to map what the selected code can do.`
         : 'No executable source evidence was available for local scanning.',
       support: 'direct',
       evidenceIds: supportingIds,
@@ -263,7 +292,7 @@ export function createDeterministicComicAnalysis(
     {
       id: 'fallback-claim-2',
       text: hasCode
-        ? `Selected code contains ${codeFeatureSummary}.`
+        ? `The selected code ${codeFeatureSummary}.`
         : 'Only repository metadata was available.',
       support: 'direct',
       evidenceIds: featureEvidenceIds,
@@ -295,7 +324,7 @@ export function createDeterministicComicAnalysis(
       text: hasCode
         ? codeProfile.features.includes('automated tests')
           ? 'Selected source includes automated test or assertion logic.'
-          : `Selected source exposes ${codeFeatureSummary} for structural review.`
+          : `Detected behavior includes these everyday actions: ${codeFeatureSummary}.`
         : 'No code outcome can be described without source evidence.',
       support: 'direct',
       evidenceIds: codeProfile.evidenceFor(
@@ -307,24 +336,24 @@ export function createDeterministicComicAnalysis(
   ]
 
   const structuralSummary = hasCode
-    ? `Local scan mapped ${scopeSummary} and detected ${codeFeatureSummary}.`
+    ? `This code ${codeFeatureSummary}. Local scanning mapped ${scopeSummary} without guessing its business purpose.`
     : 'No executable source evidence was available for this structural preview.'
 
   return comicAnalysisSchema.parse({
     generationMode: 'deterministic_fallback',
     plainLanguageSummary: `${structuralSummary} Comic Code used its API-free local mode and did not send this explanation to the OpenAI API.`,
     metaphor:
-      'A machine opened into components, pathways, safeguards, and output.',
+      'A workshop where information enters, workers check it, routes guide it, and a useful result leaves.',
     sharedVisualStyle:
       'Minimal editorial code-flow diagrams with deep indigo fields, violet paths, and one amber checkpoint per panel.',
     panels: [
       {
         sequence: 1,
         purpose: 'overview',
-        title: 'System overview',
+        title: 'What this code does',
         caption: structuralSummary,
         scenePrompt:
-          'A dark machine opened to reveal its connected source modules and main purpose.',
+          'A friendly workshop receiving information and preparing to complete a useful job.',
         claimIds: ['fallback-claim-1'],
         confidence: 'high',
         uncertaintyNote: null,
@@ -332,12 +361,12 @@ export function createDeterministicComicAnalysis(
       {
         sequence: 2,
         purpose: 'components',
-        title: 'Parts that work',
+        title: 'Who does each job',
         caption: hasCode
-          ? `Selected source uses ${codeFeatureSummary} across ${paths.length} ${plural(paths.length, 'file')}.`
+          ? `Its connected parts work like a small team. Together, the code ${codeFeatureSummary}.`
           : 'No source components were available for local scanning.',
         scenePrompt:
-          'Abstract source modules representing detected logic features connected inside one engine.',
+          'A small team of familiar workers, each handling one supported part of the job.',
         claimIds: ['fallback-claim-2'],
         confidence: 'high',
         uncertaintyNote: null,
@@ -345,7 +374,7 @@ export function createDeterministicComicAnalysis(
       {
         sequence: 3,
         purpose: 'flow',
-        title: 'How code flows',
+        title: 'What happens next',
         caption: claims[2]!.text,
         scenePrompt:
           'A clear execution path moving through input, decision, processing, and output checkpoints.',
@@ -356,10 +385,10 @@ export function createDeterministicComicAnalysis(
       {
         sequence: 4,
         purpose: 'outcome',
-        title: 'Result and safeguards',
+        title: 'Result people receive',
         caption: claims[3]!.text,
         scenePrompt:
-          'A final output gate showing detected safeguards, tests, and resulting behavior.',
+          'A workshop delivery area showing a completed result and a safe route for problems.',
         claimIds: ['fallback-claim-4'],
         confidence: 'medium',
         uncertaintyNote:
@@ -371,6 +400,6 @@ export function createDeterministicComicAnalysis(
       'API-free local analysis detects code structure and flow patterns but does not infer unstated business intent.',
     ],
     evidence: input.evidence.map(({ locator }) => locator),
-    excludedFiles: input.excludedFiles,
+    excludedFiles: input.excludedFiles.slice(0, maxPersistedExcludedFiles),
   })
 }

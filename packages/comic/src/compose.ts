@@ -119,7 +119,7 @@ export async function composeComic(
       ? 'Comic Code | User-funded code analysis and AI artwork.'
       : analysis.generationMode === 'deterministic_fallback'
         ? 'Comic Code | API-free source scan and fixed artwork.'
-        : 'Comic Code | AI-generated explanation - verify important details with the PR author.'
+        : 'Comic Code | AI-generated repository explanation - verify important details with its maintainers.'
   const footer = Buffer.from(`
     <svg width="${comicWidth}" height="${footerHeight}" xmlns="http://www.w3.org/2000/svg">
       <rect width="100%" height="100%" fill="#11116d" />
