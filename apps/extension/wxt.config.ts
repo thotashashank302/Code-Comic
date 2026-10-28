@@ -25,7 +25,10 @@ export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   vite: ({ mode }) => {
     apiBaseForMode(mode)
-    return { envDir: repositoryRoot }
+    return {
+      envDir: repositoryRoot,
+      build: { modulePreload: { polyfill: false } },
+    }
   },
   manifest: ({ mode }) => {
     const apiOrigin = new URL(apiBaseForMode(mode)).origin

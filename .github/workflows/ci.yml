@@ -31,7 +31,7 @@ jobs:
       - run: pnpm test
       - run: pnpm lint
       - run: pnpm format:check
-      - run: pnpm --filter @comic-code/web build
+      - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm --filter @comic-code/extension zip
       - run: pnpm audit --prod

@@ -7,8 +7,8 @@
     "node": ">=24"
   },
   "scripts": {
-    "build": "pnpm --filter @comic-code/web build && pnpm extension:build",
-    "dev": "pnpm --filter @comic-code/web dev --hostname 127.0.0.1",
+    "build": "pnpm --filter @comic-code/web build",
+    "dev": "pnpm extension:build && pnpm --filter @comic-code/web dev --hostname 127.0.0.1",
     "lint": "turbo run lint",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
@@ -17,7 +17,8 @@
     "extension:build": "node scripts/extension.mjs build",
     "extension:zip": "node scripts/extension.mjs zip",
     "check": "pnpm test && pnpm lint && pnpm format:check && pnpm build && pnpm typecheck",
-    "smoke:local": "node scripts/smoke-local.mjs"
+    "smoke:local": "node scripts/smoke-local.mjs",
+    "smoke:preview": "node scripts/smoke-preview.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.61.1",

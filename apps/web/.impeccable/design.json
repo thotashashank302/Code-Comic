@@ -1,0 +1,412 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-28T09:55:10.516114+00:00",
+  "title": "Design System: Comic Code",
+  "extensions": {
+    "colorMeta": {
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Canvas",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(38% 0.0000 0.00)",
+          "oklch(49% 0.0000 0.00)",
+          "oklch(61% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Text",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(38% 0.0000 0.00)",
+          "oklch(49% 0.0000 0.00)",
+          "oklch(61% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "tonalRamp": [
+          "oklch(15% 0.0169 148.54)",
+          "oklch(26% 0.0169 148.54)",
+          "oklch(38% 0.0169 148.54)",
+          "oklch(49% 0.0169 148.54)",
+          "oklch(61% 0.0169 148.54)",
+          "oklch(72% 0.0169 148.54)",
+          "oklch(84% 0.0169 148.54)",
+          "oklch(95% 0.0169 148.54)"
+        ]
+      },
+      "green": {
+        "role": "primary",
+        "displayName": "Green",
+        "tonalRamp": [
+          "oklch(15% 0.0829 145.91)",
+          "oklch(26% 0.0829 145.91)",
+          "oklch(38% 0.0829 145.91)",
+          "oklch(49% 0.0829 145.91)",
+          "oklch(61% 0.0829 145.91)",
+          "oklch(72% 0.0829 145.91)",
+          "oklch(84% 0.0829 145.91)",
+          "oklch(95% 0.0829 145.91)"
+        ]
+      },
+      "lime": {
+        "role": "primary",
+        "displayName": "Lime",
+        "tonalRamp": [
+          "oklch(15% 0.0515 114.50)",
+          "oklch(26% 0.0515 114.50)",
+          "oklch(38% 0.0515 114.50)",
+          "oklch(49% 0.0515 114.50)",
+          "oklch(61% 0.0515 114.50)",
+          "oklch(72% 0.0515 114.50)",
+          "oklch(84% 0.0515 114.50)",
+          "oklch(95% 0.0515 114.50)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Line",
+        "tonalRamp": [
+          "oklch(15% 0.0141 124.57)",
+          "oklch(26% 0.0141 124.57)",
+          "oklch(38% 0.0141 124.57)",
+          "oklch(49% 0.0141 124.57)",
+          "oklch(61% 0.0141 124.57)",
+          "oklch(72% 0.0141 124.57)",
+          "oklch(84% 0.0141 124.57)",
+          "oklch(95% 0.0141 124.57)"
+        ]
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "White",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(38% 0.0000 0.00)",
+          "oklch(49% 0.0000 0.00)",
+          "oklch(61% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "action": {
+        "role": "primary",
+        "displayName": "Action",
+        "tonalRamp": [
+          "oklch(15% 0.0582 149.05)",
+          "oklch(26% 0.0582 149.05)",
+          "oklch(38% 0.0582 149.05)",
+          "oklch(49% 0.0582 149.05)",
+          "oklch(61% 0.0582 149.05)",
+          "oklch(72% 0.0582 149.05)",
+          "oklch(84% 0.0582 149.05)",
+          "oklch(95% 0.0582 149.05)"
+        ]
+      },
+      "action-hover": {
+        "role": "primary",
+        "displayName": "Action Hover",
+        "tonalRamp": [
+          "oklch(15% 0.0836 137.66)",
+          "oklch(26% 0.0836 137.66)",
+          "oklch(38% 0.0836 137.66)",
+          "oklch(49% 0.0836 137.66)",
+          "oklch(61% 0.0836 137.66)",
+          "oklch(72% 0.0836 137.66)",
+          "oklch(84% 0.0836 137.66)",
+          "oklch(95% 0.0836 137.66)"
+        ]
+      },
+      "pale-action": {
+        "role": "primary",
+        "displayName": "Pale Action",
+        "tonalRamp": [
+          "oklch(15% 0.0540 113.10)",
+          "oklch(26% 0.0540 113.10)",
+          "oklch(38% 0.0540 113.10)",
+          "oklch(49% 0.0540 113.10)",
+          "oklch(61% 0.0540 113.10)",
+          "oklch(72% 0.0540 113.10)",
+          "oklch(84% 0.0540 113.10)",
+          "oklch(95% 0.0540 113.10)"
+        ]
+      },
+      "pale-action-ink": {
+        "role": "primary",
+        "displayName": "Pale Action Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0520 139.69)",
+          "oklch(26% 0.0520 139.69)",
+          "oklch(38% 0.0520 139.69)",
+          "oklch(49% 0.0520 139.69)",
+          "oklch(61% 0.0520 139.69)",
+          "oklch(72% 0.0520 139.69)",
+          "oklch(84% 0.0520 139.69)",
+          "oklch(95% 0.0520 139.69)"
+        ]
+      },
+      "pink": {
+        "role": "secondary",
+        "displayName": "Pink",
+        "tonalRamp": [
+          "oklch(15% 0.0410 346.27)",
+          "oklch(26% 0.0410 346.27)",
+          "oklch(38% 0.0410 346.27)",
+          "oklch(49% 0.0410 346.27)",
+          "oklch(61% 0.0410 346.27)",
+          "oklch(72% 0.0410 346.27)",
+          "oklch(84% 0.0410 346.27)",
+          "oklch(95% 0.0410 346.27)"
+        ]
+      },
+      "cool-blue": {
+        "role": "secondary",
+        "displayName": "Cool Blue",
+        "tonalRamp": [
+          "oklch(15% 0.0187 232.54)",
+          "oklch(26% 0.0187 232.54)",
+          "oklch(38% 0.0187 232.54)",
+          "oklch(49% 0.0187 232.54)",
+          "oklch(61% 0.0187 232.54)",
+          "oklch(72% 0.0187 232.54)",
+          "oklch(84% 0.0187 232.54)",
+          "oklch(95% 0.0187 232.54)"
+        ]
+      },
+      "peach": {
+        "role": "tertiary",
+        "displayName": "Peach",
+        "tonalRamp": [
+          "oklch(15% 0.0148 70.89)",
+          "oklch(26% 0.0148 70.89)",
+          "oklch(38% 0.0148 70.89)",
+          "oklch(49% 0.0148 70.89)",
+          "oklch(61% 0.0148 70.89)",
+          "oklch(72% 0.0148 70.89)",
+          "oklch(84% 0.0148 70.89)",
+          "oklch(95% 0.0148 70.89)"
+        ]
+      },
+      "extension-canvas": {
+        "role": "neutral",
+        "displayName": "Extension Canvas",
+        "tonalRamp": [
+          "oklch(15% 0.0108 118.02)",
+          "oklch(26% 0.0108 118.02)",
+          "oklch(38% 0.0108 118.02)",
+          "oklch(49% 0.0108 118.02)",
+          "oklch(61% 0.0108 118.02)",
+          "oklch(72% 0.0108 118.02)",
+          "oklch(84% 0.0108 118.02)",
+          "oklch(95% 0.0108 118.02)"
+        ]
+      },
+      "extension-ink": {
+        "role": "neutral",
+        "displayName": "Extension Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0197 154.13)",
+          "oklch(26% 0.0197 154.13)",
+          "oklch(38% 0.0197 154.13)",
+          "oklch(49% 0.0197 154.13)",
+          "oklch(61% 0.0197 154.13)",
+          "oklch(72% 0.0197 154.13)",
+          "oklch(84% 0.0197 154.13)",
+          "oklch(95% 0.0197 154.13)"
+        ]
+      },
+      "extension-action": {
+        "role": "primary",
+        "displayName": "Extension Action",
+        "tonalRamp": [
+          "oklch(15% 0.0688 144.86)",
+          "oklch(26% 0.0688 144.86)",
+          "oklch(38% 0.0688 144.86)",
+          "oklch(49% 0.0688 144.86)",
+          "oklch(61% 0.0688 144.86)",
+          "oklch(72% 0.0688 144.86)",
+          "oklch(84% 0.0688 144.86)",
+          "oklch(95% 0.0688 144.86)"
+        ]
+      },
+      "evidence-blue": {
+        "role": "secondary",
+        "displayName": "Evidence Blue",
+        "tonalRamp": [
+          "oklch(15% 0.0105 219.59)",
+          "oklch(26% 0.0105 219.59)",
+          "oklch(38% 0.0105 219.59)",
+          "oklch(49% 0.0105 219.59)",
+          "oklch(61% 0.0105 219.59)",
+          "oklch(72% 0.0105 219.59)",
+          "oklch(84% 0.0105 219.59)",
+          "oklch(95% 0.0105 219.59)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Mosaic heading",
+        "purpose": "Central transformation heading; responsive override at 700px."
+      },
+      "code": {
+        "displayName": "Source paths",
+        "purpose": "Repository paths and evidence references."
+      }
+    },
+    "shadows": [
+      {
+        "name": "mosaic-ambient",
+        "value": "0 2px 16px rgba(24, 30, 45, 0.045)",
+        "purpose": "Soft depth around pastel panels."
+      },
+      {
+        "name": "splayed-window",
+        "value": "0 12px 28px #404a2c29",
+        "purpose": "Overlapping illustrative app windows."
+      },
+      {
+        "name": "sample-toast",
+        "value": "0 6px 12px #7a566a16, 0 11px 0 -3px #e5d6d6",
+        "purpose": "Notification with a small offset backing layer."
+      },
+      {
+        "name": "preview-device",
+        "value": "0 18px 48px #263a2010",
+        "purpose": "Built extension preview frame."
+      }
+    ],
+    "motion": [
+      {
+        "name": "control-transition",
+        "value": "background 0.18s, color 0.18s, box-shadow 0.18s",
+        "purpose": "Web control state changes."
+      },
+      {
+        "name": "mosaic-settle",
+        "value": "0.8s cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Opacity, 12px translation, .988 scale and inset clipping; staggered .04\u2013.28s. Only without reduced-motion preference."
+      },
+      {
+        "name": "extension-entry",
+        "value": "0.55s cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Repository card opacity and 8px translation. Only without reduced-motion preference."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "two-column",
+        "value": "1050px"
+      },
+      {
+        "name": "single-column",
+        "value": "700px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary action",
+      "kind": "button",
+      "description": "Green workspace action.",
+      "html": "<button class=\"ds-primary\">Download PNG</button>",
+      "css": ".ds-primary{font-family:\"Plus Jakarta Sans\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;min-height:42px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:11px 20px;font-size:12px;font-weight:700;text-decoration:none;cursor:pointer;transition:background .18s,color .18s,box-shadow .18s;border:1px solid transparent;background:#2c4c32;color:white}.ds-primary:hover:not(:disabled){background:#476a3a;color:white}.ds-primary:focus-visible{outline:2px solid var(--green,#315e35);outline-offset:4px}.ds-primary:disabled{opacity:.5;cursor:not-allowed}",
+      "refersTo": "button-primary"
+    },
+    {
+      "name": "Pale action",
+      "kind": "button",
+      "description": "Chartreuse web generation and sample replay action.",
+      "html": "<button class=\"ds-pale\">Replay sample</button>",
+      "css": ".ds-pale{font-family:\"Plus Jakarta Sans\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;min-height:42px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:11px 20px;font-size:12px;font-weight:700;text-decoration:none;cursor:pointer;transition:background .18s,color .18s,box-shadow .18s;border:1px solid transparent;background:#e8edc4;color:#24391f}.ds-pale:hover:not(:disabled){background:#476a3a;color:white}.ds-pale:focus-visible{outline:2px solid var(--green,#315e35);outline-offset:4px}.ds-pale:disabled{opacity:.5;cursor:not-allowed}",
+      "refersTo": "button-pale"
+    },
+    {
+      "name": "Secondary action",
+      "kind": "button",
+      "description": "White bordered workspace or return action.",
+      "html": "<button class=\"ds-secondary\">Try the sample</button>",
+      "css": ".ds-secondary{font-family:\"Plus Jakarta Sans\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;min-height:42px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:11px 20px;font-size:12px;font-weight:700;text-decoration:none;cursor:pointer;transition:background .18s,color .18s,box-shadow .18s;border:1px solid #d5dfd0;background:var(--white,#fff);color:#2f4335;white-space:nowrap}.ds-secondary:hover:not(:disabled){background:#edf3e8}.ds-secondary:focus-visible{outline:2px solid var(--green,#315e35);outline-offset:4px}.ds-secondary:disabled{opacity:.5;cursor:not-allowed}",
+      "refersTo": "button-secondary"
+    },
+    {
+      "name": "Credential field",
+      "kind": "input",
+      "description": "Labeled field inside optional artwork controls.",
+      "html": "<label class=\"ds-field\">Cloudflare Account ID<input placeholder=\"32-character Account ID\" autocomplete=\"off\"></label>",
+      "css": ".ds-field{font-family:\"Plus Jakarta Sans\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;display:grid;gap:7px;font-size:11px;color:#4b5a48}.ds-field input{font:inherit;width:100%;height:43px;padding:0 12px;border:1px solid #d7dfcf;border-radius:9px;background:var(--white,#fff);color:var(--text,#141414);font-size:12px;caret-color:var(--green,#315e35)}.ds-field input::placeholder{color:#68716c;opacity:1}.ds-field input:focus-visible{outline:2px solid var(--green,#315e35);outline-offset:4px}"
+    },
+    {
+      "name": "Extension sections",
+      "kind": "nav",
+      "description": "Three sections with a white selected segment.",
+      "html": "<nav class=\"ds-tabs\" aria-label=\"Comic Code sections\"><button aria-pressed=\"true\">Explain</button><button aria-pressed=\"false\">Story</button><button aria-pressed=\"false\">Evidence</button></nav>",
+      "css": ".ds-tabs{font-family:\"Plus Jakarta Sans\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;display:grid;grid-template-columns:repeat(3,1fr);gap:5px;padding:5px;background:#e7ebdf;border-radius:999px}.ds-tabs button{font:inherit;border:0;border-radius:999px;padding:9px 7px;font-size:11px;color:#66745c;background:transparent;cursor:pointer}.ds-tabs button[aria-pressed=\"true\"]{background:#fff;color:#28402b;font-weight:700;box-shadow:0 2px 6px #24341b08}.ds-tabs button:focus-visible{outline:2px solid #4e7043;outline-offset:3px}.ds-tabs button:disabled{opacity:.45;cursor:not-allowed}"
+    },
+    {
+      "name": "State chip",
+      "kind": "chip",
+      "description": "Sample or privacy state carried by text.",
+      "html": "<span class=\"ds-chip\">Illustrative sample</span>",
+      "css": ".ds-chip{font-family:\"Plus Jakarta Sans\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;display:inline-block;padding:7px 12px;border-radius:999px;background:#eff3e8;color:#4e6243;white-space:nowrap;font-size:10px;font-weight:700}"
+    },
+    {
+      "name": "Workspace container",
+      "kind": "card",
+      "description": "White working surface below the mosaic.",
+      "html": "<section class=\"ds-workspace\"><h2>A little context goes a long way.</h2><p>Inspect a repository above, or explore the sample.</p></section>",
+      "css": ".ds-workspace{font-family:\"Plus Jakarta Sans\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;background:var(--white,#fff);color:var(--text,#141414);border:1px solid #e2e4dd;border-radius:22px;padding:30px}.ds-workspace h2{font-size:24px;letter-spacing:-.03em;margin:0 0 9px;font-weight:800}.ds-workspace p{font-size:13px;color:var(--muted,#586159);margin:0;max-width:70ch;line-height:1.7}",
+      "refersTo": "workspace"
+    },
+    {
+      "name": "Extension evidence",
+      "kind": "custom",
+      "description": "Cool-blue evidence inset with wrapping source paths.",
+      "html": "<div class=\"ds-evidence\"><div><code>src/book-form.tsx</code><small>Lines 12\u201324 \u00b7 sample-form</small></div><div><code>src/library.ts</code><small>Lines 8\u201317 \u00b7 sample-storage</small></div></div>",
+      "css": ".ds-evidence{font-family:\"Plus Jakarta Sans\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;border-radius:12px;padding:0 14px;background:#e4edf0}.ds-evidence>div{padding:15px 0;border-bottom:1px solid #d0dce0}.ds-evidence>div:last-child{border:0}.ds-evidence code{display:block;font-family:ui-monospace,SFMono-Regular,monospace;font-size:10px;color:#45636d;overflow-wrap:anywhere}.ds-evidence small{display:block;font-size:8px;margin-top:7px;color:#48656d}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Source becomes a clear visual story.",
+    "overview": "The user-pinned world is a light SaaS mosaic: a gray canvas, pastel panels,\nrounded white chrome, near-black type and restrained green actions. Unequal\npanels and splayed source/comic windows give the introduction its character;\nthe working interface uses quieter white and pale-green surfaces.\n\nThis vocabulary covers the web workspace and Chrome side panel. The extension\ncompresses it into a single column with a chartreuse repository card, pink\nsample strip and cool-blue evidence list. Its preview embeds the actual built\nextension rather than a separate mock interface.",
+    "keyCharacteristics": [
+      "Five unequal introductory panels, followed by a functional white workspace.",
+      "Plus Jakarta Sans, heavy compact headings and small calm supporting text.",
+      "Soft tonal depth, rounded containers and pill controls.",
+      "Inline SVG geometry, explicit illustrative-sample labels and visible evidence."
+    ],
+    "rules": [
+      {
+        "name": "The Light Surface Rule",
+        "body": "Keep this light canvas and pastel vocabulary; do not restore the replaced violet glow or giant dark hero.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "**Do** retain Plus Jakarta Sans and the light gray/pastel surface hierarchy.",
+      "**Do** preserve readable supporting text, keyboard outlines and explicit selection states.",
+      "**Do** label bundled sample source, panels and evidence as illustrative.",
+      "**Do** adapt the shared vocabulary to the extension's narrow single column.",
+      "**Do** keep provenance with shipping raster assets; bundled PNG icons have procedural source."
+    ],
+    "donts": [
+      "**Don't** introduce violet glows, a giant dark hero or replacement typography.",
+      "**Don't** present decorative process bars as measured performance or savings.",
+      "**Don't** imply the bundled sample is a live repository scan or paid generation.",
+      "**Don't** replace the actual extension preview with a disconnected mockup."
+    ]
+  }
+}

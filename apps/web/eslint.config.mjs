@@ -5,5 +5,10 @@ import nextTypescript from 'eslint-config-next/typescript'
 export default defineConfig([
   ...nextVitals,
   ...nextTypescript,
-  globalIgnores(['.next/**', '.trigger/**', 'next-env.d.ts']),
+  globalIgnores([
+    '.next/**',
+    '.trigger/**',
+    'next-env.d.ts',
+    'public/extension-preview/**',
+  ]),
 ])

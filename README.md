@@ -17,6 +17,21 @@ Open **http://127.0.0.1:3000**, paste a GitHub repository URL, inspect it, and
 choose **Generate fixed comic**. Download the PNG or reopen it from **Saved
 comics** after a restart. Leave the Cloudflare fields empty for the free flow.
 
+## Preview without using API quota
+
+Choose **Explore a sample** or **Try the sample** to inspect the bundled example
+story and evidence without contacting GitHub or Cloudflare. The sample is labeled
+illustrative; it does not pretend to be a fresh scan. You can download its PNG.
+
+Open **http://127.0.0.1:3000/extension** for the actual built side-panel interface
+in a browser. Explain, Story, Evidence and compact-layout controls work with sample
+data. Its browser-served preview blocks all `connect-src` requests with CSP. The
+installed Chrome extension also has an **Explore sample** control. Live OAuth,
+private repository access and provider quota behavior still need separate tests.
+`pnpm dev` and `pnpm build` generate the extension preview automatically.
+With the server running, `pnpm smoke:preview` checks preview assets, fonts,
+framing policy and the sample PNG without consuming provider quota.
+
 The free result uses bounded structural analysis and bundled artwork. It
 identifies patterns in sampled files; it does not provide AI semantic analysis
 or prove that the repository is correct. A scan selects up to 40 files and

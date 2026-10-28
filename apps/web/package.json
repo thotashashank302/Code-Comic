@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "next build --webpack",
+    "build": "node ../../scripts/extension.mjs build && next build --webpack",
     "dev": "next dev --turbopack",
     "lint": "eslint . --max-warnings=0",
     "start": "next start",

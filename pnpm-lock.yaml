@@ -38,6 +38,9 @@ importers:
 
   apps/extension:
     dependencies:
+      '@comic-code/comic':
+        specifier: workspace:*
+        version: link:../../packages/comic
       '@comic-code/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import type { ComicAnalysis } from '@comic-code/contracts'
+import { sampleRepository, sampleExplanation } from '@comic-code/comic/sample'
 import { parseGitHubRepositoryUrl } from '@comic-code/contracts/repository-url'
 
 import { BrandGlyph } from './brand-glyph'
@@ -199,12 +200,32 @@ async function requestApi<T>(
   return result
 }
 
+const previewDocument =
+  new URLSearchParams(window.location.search).get('preview') === '1'
+
+const bundledSample = {
+  ...sampleExplanation,
+  artifactUrl: new URL(
+    '/sample-comic.png',
+    previewDocument ? window.location.origin : apiBase,
+  ).href,
+}
+
 function SidePanelShell() {
-  const [coordinate, setCoordinate] = useState<Coordinate | null>(null)
-  const [session, setSession] = useState<string | null>(null)
-  const [localMode, setLocalMode] = useState(false)
-  const [repository, setRepository] = useState<Repository | null>(null)
-  const [explanation, setExplanation] = useState<Explanation | null>(null)
+  const [sampleMode, setSampleMode] = useState(previewDocument)
+  const [coordinate, setCoordinate] = useState<Coordinate | null>(
+    previewDocument ? sampleRepository : null,
+  )
+  const [session, setSession] = useState<string | null>(
+    previewDocument ? 'sample-preview' : null,
+  )
+  const [localMode, setLocalMode] = useState(previewDocument)
+  const [repository, setRepository] = useState<Repository | null>(
+    previewDocument ? sampleRepository : null,
+  )
+  const [explanation, setExplanation] = useState<Explanation | null>(
+    previewDocument ? bundledSample : null,
+  )
   const [activeTab, setActiveTab] = useState<Tab>('explain')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -223,6 +244,7 @@ function SidePanelShell() {
     cloudflareApiToken.trim().length >= 20
 
   useEffect(() => {
+    if (sampleMode) return
     let active = true
     const initialize = async () => {
       const stored = (await chrome.storage.local.get([
@@ -278,10 +300,10 @@ function SidePanelShell() {
       active = false
       chrome.storage.onChanged.removeListener(storageListener)
     }
-  }, [])
+  }, [sampleMode])
 
   useEffect(() => {
-    if (!coordinate || !session) return
+    if (sampleMode || !coordinate || !session) return
     let active = true
     const inspect = async () => {
       setBusy(true)
@@ -342,12 +364,13 @@ function SidePanelShell() {
     return () => {
       active = false
     }
-  }, [coordinate, session])
+  }, [coordinate, session, sampleMode])
 
   const explanationId = explanation?.id
   const explanationStatus = explanation?.status
   useEffect(() => {
     if (
+      sampleMode ||
       !coordinate ||
       !session ||
       !explanationId ||
@@ -384,10 +407,11 @@ function SidePanelShell() {
       active = false
       window.clearInterval(interval)
     }
-  }, [coordinate, explanationId, explanationStatus, session])
+  }, [coordinate, explanationId, explanationStatus, session, sampleMode])
 
   useEffect(() => {
     if (
+      sampleMode ||
       !session ||
       !explanationId ||
       explanationStatus !== 'completed' ||
@@ -404,7 +428,13 @@ function SidePanelShell() {
     }
     const interval = window.setInterval(refreshArtifact, 4 * 60 * 1_000)
     return () => window.clearInterval(interval)
-  }, [explanation?.artifactUrl, explanationId, explanationStatus, session])
+  }, [
+    explanation?.artifactUrl,
+    explanationId,
+    explanationStatus,
+    session,
+    sampleMode,
+  ])
 
   const connectGitHub = async () => {
     setError(null)
@@ -432,6 +462,12 @@ function SidePanelShell() {
   }
 
   const generate = async () => {
+    if (sampleMode) {
+      setExplanation(bundledSample)
+      setActiveTab('story')
+      setNotice('Illustrative sample · no API requests or credits used.')
+      return
+    }
     if (!session || !repository) return
     setBusy(true)
     setError(null)
@@ -496,7 +532,7 @@ function SidePanelShell() {
 
   const generateWithCloudflare = useCallback(
     async (target: Explanation) => {
-      if (!session || !target.analysis) return
+      if (sampleMode || !session || !target.analysis) return
       setAiGenerationRequested(true)
       setArtworkBusy(true)
       setError(null)
@@ -553,7 +589,7 @@ function SidePanelShell() {
         setArtworkBusy(false)
       }
     },
-    [cloudflareAccountId, cloudflareApiToken, coordinate, session],
+    [cloudflareAccountId, cloudflareApiToken, coordinate, session, sampleMode],
   )
 
   useEffect(() => {
@@ -584,7 +620,7 @@ function SidePanelShell() {
   const toggleCompact = async () => {
     const next = !compact
     setCompact(next)
-    await chrome.storage.local.set({ comicCodeCompact: next })
+    if (!sampleMode) await chrome.storage.local.set({ comicCodeCompact: next })
   }
 
   const logout = async () => {
@@ -593,6 +629,20 @@ function SidePanelShell() {
     setRepository(null)
     setExplanation(null)
     setAiGenerationRequested(false)
+  }
+
+  const loadSample = () => {
+    pendingCloudflare.current = false
+    setSampleMode(true)
+    setLocalMode(true)
+    setCoordinate(sampleRepository)
+    setRepository(sampleRepository)
+    setExplanation(bundledSample)
+    setSession('sample-preview')
+    setActiveTab('explain')
+    setError(null)
+    setNotice(null)
+    setBusy(false)
   }
 
   return (
@@ -616,10 +666,46 @@ function SidePanelShell() {
           onClick={toggleCompact}
           title="Toggle compact layout"
         >
-          {compact ? '↗' : '↙'}
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d={
+                compact
+                  ? 'M8 3H3v5m0-5 7 7m6 11h5v-5m0 5-7-7'
+                  : 'M3 8h5V3m0 5L2 2m19 14h-5v5m0-5 6 6'
+              }
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+            />
+          </svg>
         </button>
       </header>
 
+      <div className="sample-switch">
+        {sampleMode ? (
+          <>
+            <span className="sample-indicator">Sample workspace</span>
+            <small>No API calls · no credits</small>
+            {!previewDocument ? (
+              <button type="button" onClick={() => window.location.reload()}>
+                Back to current tab
+              </button>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <span>Just looking around?</span>
+            <button
+              type="button"
+              disabled={busy || artworkBusy}
+              onClick={loadSample}
+            >
+              Explore sample
+            </button>
+          </>
+        )}
+      </div>
       {coordinate ? (
         <section className="pr-heading">
           <span className="repo-label">
@@ -627,7 +713,7 @@ function SidePanelShell() {
           </span>
           <div>
             <strong>Repository architecture</strong>
-            <span className="live-dot">Live</span>
+            <span className="live-dot">{sampleMode ? 'Sample' : 'Live'}</span>
           </div>
           {repository?.description ? <p>{repository.description}</p> : null}
         </section>
@@ -649,6 +735,7 @@ function SidePanelShell() {
             <button
               key={tab}
               className={activeTab === tab ? 'active' : ''}
+              aria-pressed={activeTab === tab}
               type="button"
               onClick={() => setActiveTab(tab)}
               disabled={
@@ -716,106 +803,121 @@ function SidePanelShell() {
                   </div>
                 ))}
               </div>
-              <section
-                className="side-byok"
-                aria-labelledby="side-cloudflare-title"
-              >
-                <span className="eyebrow">Choose image mode</span>
-                <h2 id="side-cloudflare-title">Your image-generation key</h2>
-                <p>
-                  No key gives a fixed, API-free comic. Add your Cloudflare
-                  Workers AI key for semantic code analysis and four unique FLUX
-                  images charged only to your account.
-                </p>
-                <label>
-                  Cloudflare Account ID
-                  <input
-                    value={cloudflareAccountId}
-                    onChange={(event) =>
-                      setCloudflareAccountId(event.target.value)
-                    }
-                    placeholder="32-character Account ID"
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                </label>
-                <label>
-                  Workers AI API token (not Global API key)
-                  <input
-                    type="password"
-                    value={cloudflareApiToken}
-                    onChange={(event) =>
-                      setCloudflareApiToken(event.target.value)
-                    }
-                    placeholder="Workers AI Read + Edit token"
-                    autoComplete="new-password"
-                    spellCheck={false}
-                  />
-                </label>
-                <small>
-                  Saved only in extension local storage. Credentials and masked
-                  source go to Cloudflare only when you request AI generation;
-                  Comic Code never stores them on its server.
-                </small>
-                <a
-                  href="https://developers.cloudflare.com/workers-ai/get-started/rest-api/"
-                  target="_blank"
-                  rel="noreferrer"
+              {!sampleMode ? (
+                <details
+                  className="side-byok"
+                  aria-labelledby="side-cloudflare-title"
                 >
-                  Create Cloudflare credentials
-                </a>
-                {['completed', 'failed'].includes(explanation?.status ?? '') &&
-                explanation?.analysis ? (
-                  <button
-                    className="primary-action"
-                    type="button"
-                    onClick={() => void generateWithCloudflare(explanation)}
-                    disabled={!cloudflareReady || artworkBusy}
-                  >
-                    {artworkBusy
-                      ? 'Analyzing code + generating 4 panels…'
-                      : 'Analyze code + generate 4 AI panels'}
-                  </button>
-                ) : (
-                  <p className="side-byok__status">
-                    {cloudflareReady
-                      ? 'Key ready. Full AI comic will run after source scan.'
-                      : 'No key: fixed fallback remains available.'}
+                  <summary>
+                    <strong>Optional AI artwork</strong>
+                    <span aria-hidden="true">+</span>
+                  </summary>
+                  <h2 id="side-cloudflare-title">Your image-generation key</h2>
+                  <p>
+                    No key gives a fixed, API-free comic. Add your Cloudflare
+                    Workers AI key for semantic code analysis and four unique
+                    FLUX images charged only to your account.
                   </p>
-                )}
-                <button
-                  className="side-byok__clear"
-                  type="button"
-                  onClick={clearCloudflareCredentials}
-                  disabled={artworkBusy}
-                >
-                  Remove saved credentials
-                </button>
-              </section>
+                  <label>
+                    Cloudflare Account ID
+                    <input
+                      value={cloudflareAccountId}
+                      onChange={(event) =>
+                        setCloudflareAccountId(event.target.value)
+                      }
+                      placeholder="32-character Account ID"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </label>
+                  <label>
+                    Workers AI API token (not Global API key)
+                    <input
+                      type="password"
+                      value={cloudflareApiToken}
+                      onChange={(event) =>
+                        setCloudflareApiToken(event.target.value)
+                      }
+                      placeholder="Workers AI Read + Edit token"
+                      autoComplete="new-password"
+                      spellCheck={false}
+                    />
+                  </label>
+                  <small>
+                    Saved only in extension local storage. Credentials and
+                    masked source go to Cloudflare only when you request AI
+                    generation; Comic Code never stores them on its server.
+                  </small>
+                  <a
+                    href="https://developers.cloudflare.com/workers-ai/get-started/rest-api/"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Create Cloudflare credentials
+                  </a>
+                  {['completed', 'failed'].includes(
+                    explanation?.status ?? '',
+                  ) && explanation?.analysis ? (
+                    <button
+                      className="primary-action"
+                      type="button"
+                      onClick={() => void generateWithCloudflare(explanation)}
+                      disabled={!cloudflareReady || artworkBusy}
+                    >
+                      {artworkBusy
+                        ? 'Analyzing code + generating 4 panels…'
+                        : 'Analyze code + generate 4 AI panels'}
+                    </button>
+                  ) : (
+                    <p className="side-byok__status">
+                      {cloudflareReady
+                        ? 'Key ready. Full AI comic will run after source scan.'
+                        : 'No key: fixed fallback remains available.'}
+                    </p>
+                  )}
+                  <button
+                    className="side-byok__clear"
+                    type="button"
+                    onClick={clearCloudflareCredentials}
+                    disabled={artworkBusy}
+                  >
+                    Remove saved credentials
+                  </button>
+                </details>
+              ) : null}
               <button
                 className="primary-action primary-action--amber"
                 type="button"
                 onClick={generate}
                 disabled={busy}
               >
-                {busy
-                  ? 'Preparing source preview…'
-                  : explanation?.status === 'completed'
-                    ? cloudflareReady
-                      ? 'Regenerate full AI comic'
-                      : 'Regenerate fixed comic'
-                    : explanation?.status === 'failed'
-                      ? 'Retry explanation'
-                      : cloudflareReady
-                        ? 'Generate full AI comic'
-                        : 'Generate fixed comic'}
+                {sampleMode
+                  ? 'View sample story'
+                  : busy
+                    ? 'Preparing source preview…'
+                    : explanation?.status === 'completed'
+                      ? cloudflareReady
+                        ? 'Regenerate full AI comic'
+                        : 'Regenerate fixed comic'
+                      : explanation?.status === 'failed'
+                        ? 'Retry explanation'
+                        : cloudflareReady
+                          ? 'Generate full AI comic'
+                          : 'Generate fixed comic'}
               </button>
               <div className="privacy-note">
                 <span>✦</span>
                 <p>
-                  Scans repository tree, then reads up to 40 representative
-                  files at commit {repository.commitSha.slice(0, 7)}. Secrets,
-                  binaries, dependencies, and generated files stay excluded.
+                  {sampleMode ? (
+                    'Illustrative source files for previewing the interface. This sample is not a live GitHub scan.'
+                  ) : (
+                    <>
+                      Scans repository tree, then reads up to 40 representative
+                      files at commit {repository.commitSha.slice(0, 7)}.
+                      Secrets, binaries, dependencies, and generated files stay
+                      excluded.
+                    </>
+                  )}
                 </p>
               </div>
             </>
@@ -868,13 +970,19 @@ function SidePanelShell() {
               <strong>
                 {explanation.analysis.artworkProvider === 'cloudflare_byok'
                   ? 'API-free story · user-funded AI artwork.'
-                  : 'API-free template mode.'}
+                  : sampleMode
+                    ? 'Illustrative sample.'
+                    : 'API-free template mode.'}
               </strong>{' '}
-              Story explains selected source code without an OpenAI API call.
+              {sampleMode
+                ? 'Bundled example panels and evidence. No repository was fetched or verified.'
+                : 'Story explains selected source code without an OpenAI API call.'}
               {explanation.analysis.artworkProvider === 'cloudflare_byok'
                 ? ' Images use your Cloudflare credits.'
                 : ' Images use bundled templates.'}{' '}
-              Add your key in Explain for semantic analysis and unique images.
+              {!sampleMode
+                ? 'Add your key in Explain for semantic analysis and unique images.'
+                : ''}
             </p>
           ) : null}
           {explanation.artifactUrl ? (
@@ -906,14 +1014,16 @@ function SidePanelShell() {
                 Download PNG
               </a>
             ) : null}
-            <button
-              className="secondary-action"
-              type="button"
-              onClick={createShare}
-              disabled={localMode || busy || artworkBusy}
-            >
-              {localMode ? 'Sharing requires hosted mode' : 'Copy share link'}
-            </button>
+            {!sampleMode ? (
+              <button
+                className="secondary-action"
+                type="button"
+                onClick={createShare}
+                disabled={localMode || busy || artworkBusy}
+              >
+                {localMode ? 'Sharing requires hosted mode' : 'Copy share link'}
+              </button>
+            ) : null}
           </div>
           {notice ? (
             <p className="panel-notice panel-notice--success">{notice}</p>
@@ -928,7 +1038,6 @@ function SidePanelShell() {
         <section className="panel-content">
           <div className="section-title">
             <div>
-              <span className="eyebrow">Traceable claims</span>
               <h2>Evidence map</h2>
             </div>
             <span>{explanation.analysis.evidence.length}</span>
@@ -950,15 +1059,19 @@ function SidePanelShell() {
       ) : null}
 
       <footer className="panel-footer">
-        <button
-          type="button"
-          onClick={() =>
-            void chrome.tabs.create({ url: 'chrome://settings/appearance' })
-          }
-        >
-          Panel: {panelSide === 'unknown' ? 'browser setting' : panelSide} ·
-          move in Chrome Appearance
-        </button>
+        {sampleMode ? (
+          <span>Sample preview · Comic Code</span>
+        ) : (
+          <button
+            type="button"
+            onClick={() =>
+              void chrome.tabs.create({ url: 'chrome://settings/appearance' })
+            }
+          >
+            Panel: {panelSide === 'unknown' ? 'browser setting' : panelSide} ·
+            move in Chrome Appearance
+          </button>
+        )}
         {session && !localMode ? (
           <button type="button" onClick={logout}>
             Sign out

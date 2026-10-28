@@ -345,7 +345,7 @@ export function createDeterministicComicAnalysis(
     metaphor:
       'A workshop where information enters, workers check it, routes guide it, and a useful result leaves.',
     sharedVisualStyle:
-      'Minimal editorial code-flow diagrams with deep indigo fields, violet paths, and one amber checkpoint per panel.',
+      'Minimal editorial code-flow diagrams on chartreuse, blush pink, cool blue and peach surfaces with dark green linework and clear checkpoints.',
     panels: [
       {
         sequence: 1,

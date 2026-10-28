@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { ComicAnalysis } from '@comic-code/contracts'
+import { sampleExplanation, sampleRepository } from '@comic-code/comic/sample'
 
 import { BrandMark } from '@/components/brand-mark'
 import { Storyboard } from '@/components/storyboard'
+import { ProductMosaic } from '@/components/product-mosaic'
 
 type User = { id: string; login: string; avatarUrl: string | null }
 type Repository = {
@@ -128,6 +130,7 @@ export function ComicCodeApp() {
   const [user, setUser] = useState<User | null>(null)
   const [authChecked, setAuthChecked] = useState(false)
   const [localMode, setLocalMode] = useState(false)
+  const [sampleMode, setSampleMode] = useState(false)
   const [recent, setRecent] = useState<Explanation[]>([])
   const [repositoryUrl, setRepositoryUrl] = useState('')
   const [repository, setRepository] = useState<Repository | null>(null)
@@ -196,6 +199,7 @@ export function ComicCodeApp() {
   }, [activeExplanationId, activeStatus])
 
   const inspectRepository = async () => {
+    setSampleMode(false)
     if (!user) {
       // OAuth needs a full browser navigation so the GitHub redirect can leave the app.
       window.location.assign(
@@ -230,6 +234,10 @@ export function ComicCodeApp() {
   }
 
   const generate = async () => {
+    if (sampleMode) {
+      setExplanation(sampleExplanation)
+      return
+    }
     if (!repository) return
     setBusy(true)
     setError(null)
@@ -289,7 +297,7 @@ export function ComicCodeApp() {
 
   const generateWithCloudflare = useCallback(
     async (target: Explanation) => {
-      if (!target.analysis) return
+      if (sampleMode || !target.analysis) return
       setAiGenerationRequested(true)
       setArtworkBusy(true)
       setArtworkNotice(null)
@@ -326,7 +334,7 @@ export function ComicCodeApp() {
         setArtworkBusy(false)
       }
     },
-    [cloudflareAccountId, cloudflareApiToken],
+    [cloudflareAccountId, cloudflareApiToken, sampleMode],
   )
 
   useEffect(() => {
@@ -351,6 +359,12 @@ export function ComicCodeApp() {
   }
 
   const removeExplanation = async () => {
+    if (sampleMode) {
+      setExplanation(null)
+      setRepository(null)
+      setSampleMode(false)
+      return
+    }
     if (
       !explanation ||
       !window.confirm('Delete this comic and revoke its artifact?')
@@ -375,99 +389,88 @@ export function ComicCodeApp() {
     }
   }
 
+  const loadSample = () => {
+    pendingCloudflare.current = false
+    setSampleMode(true)
+    setAiGenerationRequested(false)
+    setError(null)
+    setArtworkNotice(null)
+    setShareNotice(null)
+    setRepository(sampleRepository)
+    setExplanation(sampleExplanation)
+    requestAnimationFrame(() =>
+      document
+        .getElementById('workspace')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    )
+  }
+
   return (
-    <main className="site-shell">
+    <main className="site-shell" id="top">
       <nav className="topbar" aria-label="Primary navigation">
         <a className="brand" href="#top" aria-label="Comic Code home">
           <BrandMark compact />
-          <span>comic code</span>
-        </a>
-        <div className="topbar__meta">
-          <span className="hackathon-tag">
-            {localMode ? 'Free local mode' : 'Repository comics'}
+          <span>
+            comic code<span className="brand-period">.</span>
           </span>
-          {authChecked && user ? (
-            <span className="user-chip">
-              {localMode ? 'On your computer' : `@${user.login}`}
-            </span>
-          ) : null}
+        </a>
+        <div className="topbar-links">
+          <a href="#workspace">Workspace</a>
+          <a href="/extension">Extension preview</a>
         </div>
+        <span className="user-chip">
+          {localMode
+            ? 'Local workspace'
+            : user
+              ? `@${user.login}`
+              : 'Repository comics'}
+          <span className="status-dot" />
+        </span>
       </nav>
-
-      <section className="hero" id="top">
-        <div className="hero__copy">
-          <span className="eyebrow">Repositories · translated visually</span>
-          <h1>
-            See what the code <em>means.</em>
-          </h1>
-          <p>
-            Comic Code maps a GitHub repository and turns how its major parts
-            work together into a grounded four-panel story anyone can
-            understand—without exposing source in storage.
-          </p>
-          <div className="trust-row">
-            <span>
-              {localMode
-                ? 'Public repositories · no sign-in'
-                : 'Read-only GitHub App'}
-            </span>
-            <span>Evidence-linked claims</span>
-            <span>Private by default</span>
-          </div>
-        </div>
-        <div className="hero__orb" aria-hidden="true">
-          <BrandMark />
-        </div>
-      </section>
-
-      <section className="workspace" aria-labelledby="workspace-title">
+      <ProductMosaic
+        value={repositoryUrl}
+        onChange={(value) => {
+          setRepositoryUrl(value)
+          setRepository(null)
+          setError(null)
+        }}
+        onInspect={inspectRepository}
+        onSample={loadSample}
+        busy={busy || artworkBusy}
+        ready={authChecked}
+        signedIn={Boolean(user)}
+      />
+      <section
+        className="workspace"
+        id="workspace"
+        aria-labelledby="workspace-title"
+      >
         <div className="workspace__header">
           <div>
-            <span className="eyebrow">
-              {localMode ? 'Runs on your computer' : 'Hosted workspace'}
-            </span>
-            <h2 id="workspace-title">Explain a repository</h2>
+            <h2 id="workspace-title">A little context goes a long way.</h2>
+            <p>
+              Inspect a repository above, or explore the sample to see how a
+              story comes together.
+            </p>
           </div>
-          <span className="step-label">
-            {localMode ? 'Inspect → generate → download' : '01 · Connect'}
-          </span>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={loadSample}
+            disabled={busy || artworkBusy}
+          >
+            Try the sample
+          </button>
         </div>
-
-        <div className="url-control">
-          <label htmlFor="repository-url">GitHub repository URL</label>
-          <div>
-            <input
-              id="repository-url"
-              type="url"
-              value={repositoryUrl}
-              onChange={(event) => {
-                setRepositoryUrl(event.target.value)
-                setRepository(null)
-                setError(null)
-              }}
-              disabled={busy || artworkBusy}
-              placeholder="https://github.com/owner/repository"
-              autoComplete="url"
-            />
-            <button
-              className="primary-button"
-              type="button"
-              onClick={inspectRepository}
-              disabled={
-                !authChecked || busy || artworkBusy || !repositoryUrl.trim()
-              }
-            >
-              {!authChecked
-                ? 'Loading…'
-                : busy
-                  ? 'Working…'
-                  : user
-                    ? 'Inspect repository'
-                    : 'Connect GitHub'}
-            </button>
+        {sampleMode ? (
+          <div className="notice notice--sample" role="status">
+            <strong>You’re exploring a sample.</strong>
+            <p>
+              Illustrative source, panels and evidence. No GitHub requests, AI
+              calls or credits used.
+            </p>
           </div>
-        </div>
-
+        ) : null}
         {localMode ? (
           <p className="byok-privacy">
             Free structural analysis and bundled artwork. Public repositories
@@ -489,6 +492,8 @@ export function ComicCodeApp() {
                   return
                 }
                 setError(null)
+                setSampleMode(false)
+                setBusy(true)
                 try {
                   const result = await api<{ explanation: Explanation }>(
                     `/api/v1/explanations/${id}`,
@@ -502,6 +507,8 @@ export function ComicCodeApp() {
                         : 'request_failed',
                     ),
                   )
+                } finally {
+                  setBusy(false)
                 }
               }}
             >
@@ -536,7 +543,11 @@ export function ComicCodeApp() {
                 </h3>
               </div>
               <span className="privacy-pill">
-                {repository.isPrivate ? 'Private' : 'Public'}
+                {sampleMode
+                  ? 'Illustrative sample'
+                  : repository.isPrivate
+                    ? 'Private'
+                    : 'Public'}
               </span>
             </header>
             <div
@@ -561,30 +572,38 @@ export function ComicCodeApp() {
                 onClick={generate}
                 disabled={busy || artworkBusy}
               >
-                {busy
-                  ? 'Preparing source preview…'
-                  : explanation?.status === 'completed'
-                    ? cloudflareReady
-                      ? 'Regenerate full AI comic'
-                      : 'Regenerate fixed comic'
-                    : explanation?.status === 'failed'
-                      ? 'Retry generation'
-                      : cloudflareReady
-                        ? 'Generate full AI comic'
-                        : 'Generate fixed comic'}
+                {sampleMode
+                  ? 'Replay sample'
+                  : busy
+                    ? 'Preparing source preview…'
+                    : explanation?.status === 'completed'
+                      ? cloudflareReady && !sampleMode
+                        ? 'Regenerate full AI comic'
+                        : 'Regenerate fixed comic'
+                      : explanation?.status === 'failed'
+                        ? 'Retry generation'
+                        : cloudflareReady && !sampleMode
+                          ? 'Generate full AI comic'
+                          : 'Generate fixed comic'}
               </button>
             </footer>
           </div>
         ) : null}
 
-        {repository ? (
-          <section
+        {repository && !sampleMode ? (
+          <details
             className="byok-card"
             aria-labelledby="cloudflare-setup-title"
           >
+            <summary>
+              <span>
+                <strong>Make it your own with AI</strong>
+                <small>Optional · uses your Cloudflare account</small>
+              </span>
+              <span aria-hidden="true">+</span>
+            </summary>
             <div>
-              <span className="eyebrow">02 · Choose image mode</span>
-              <h3 id="cloudflare-setup-title">Your image-generation key</h3>
+              <h3 id="cloudflare-setup-title">Connect Cloudflare</h3>
               <p>
                 Leave fields empty for fixed bundled comic images. Add your
                 Cloudflare Workers AI credentials for semantic code analysis and
@@ -666,7 +685,7 @@ export function ComicCodeApp() {
                 {artworkNotice}
               </p>
             ) : null}
-          </section>
+          </details>
         ) : null}
 
         {explanation ? (
@@ -702,6 +721,7 @@ export function ComicCodeApp() {
             (!aiGenerationRequested ||
               explanation.analysis.artworkProvider === 'cloudflare_byok') ? (
               <Storyboard
+                sample={sampleMode}
                 analysis={explanation.analysis}
                 artifactUrl={explanation.artifactUrl}
               />
@@ -721,7 +741,7 @@ export function ComicCodeApp() {
                     Download PNG
                   </a>
                 ) : null}
-                {!localMode ? (
+                {!localMode && !sampleMode ? (
                   <button
                     className="secondary-button"
                     type="button"
@@ -737,7 +757,7 @@ export function ComicCodeApp() {
                   disabled={busy || artworkBusy}
                   onClick={removeExplanation}
                 >
-                  Delete
+                  {sampleMode ? 'Close sample' : 'Delete'}
                 </button>
                 {shareNotice ? (
                   <span className="success-text">{shareNotice}</span>

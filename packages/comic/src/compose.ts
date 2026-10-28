@@ -68,13 +68,13 @@ async function composePanel(input: {
     : []
   const overlay = Buffer.from(`
     <svg width="${panelWidth}" height="${panelHeight}" xmlns="http://www.w3.org/2000/svg">
-      <rect x="14" y="14" width="772" height="557" rx="22" fill="none" stroke="#5459ff" stroke-width="3" />
-      <rect x="18" y="426" width="764" height="141" rx="18" fill="#080814" fill-opacity="0.96" />
-      <circle cx="45" cy="44" r="19" fill="#ffb53e" />
-      ${pixelTextSvg(String(input.sequence), { x: 41, y: 36, scale: 2.4, color: '#171006' })}
-      ${pixelTextSvg(input.title, { x: 76, y: 34, scale: 3, color: '#ffffff' })}
-      ${textLinesSvg(captionLines, { x: 28, startY: 442, lineHeight: 25, scale: 2.15, color: '#f8f8ff' })}
-      ${textLinesSvg(uncertaintyLines, { x: 28, startY: 535, lineHeight: 17, scale: 1.45, color: '#a6a7bf' })}
+      <rect x="14" y="14" width="772" height="557" rx="22" fill="none" stroke="#d6dfcc" stroke-width="3" />
+      <rect x="18" y="426" width="764" height="141" rx="18" fill="#fcfdf8" fill-opacity="0.96" />
+      <circle cx="45" cy="44" r="19" fill="#d3e3ad" />
+      ${pixelTextSvg(String(input.sequence), { x: 41, y: 36, scale: 2.4, color: '#26482c' })}
+      ${pixelTextSvg(input.title, { x: 76, y: 34, scale: 3, color: '#19251c' })}
+      ${textLinesSvg(captionLines, { x: 28, startY: 442, lineHeight: 25, scale: 2.15, color: '#28382a' })}
+      ${textLinesSvg(uncertaintyLines, { x: 28, startY: 535, lineHeight: 17, scale: 1.45, color: '#64715d' })}
     </svg>
   `)
 
@@ -83,7 +83,7 @@ async function composePanel(input: {
       width: panelWidth,
       height: panelHeight,
       channels: 4,
-      background: '#05050d',
+      background: '#f8faf3',
     },
   })
     .composite([
@@ -122,8 +122,8 @@ export async function composeComic(
         : 'Comic Code | AI-generated repository explanation - verify important details with its maintainers.'
   const footer = Buffer.from(`
     <svg width="${comicWidth}" height="${footerHeight}" xmlns="http://www.w3.org/2000/svg">
-      <rect width="100%" height="100%" fill="#11116d" />
-      ${pixelTextSvg(footerText, { x: 20, y: 8, scale: 1.45, color: '#ffffff' })}
+      <rect width="100%" height="100%" fill="#dce7c7" />
+      ${pixelTextSvg(footerText, { x: 20, y: 8, scale: 1.45, color: '#19251c' })}
     </svg>
   `)
 
@@ -132,7 +132,7 @@ export async function composeComic(
       width: comicWidth,
       height: comicHeight,
       channels: 4,
-      background: '#05050d',
+      background: '#f8faf3',
     },
   })
     .composite([

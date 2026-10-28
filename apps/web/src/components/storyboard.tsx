@@ -3,11 +3,16 @@ import Image from 'next/image'
 import type { ComicAnalysis } from '@comic-code/contracts'
 
 type StoryboardProps = {
+  sample?: boolean
   analysis: ComicAnalysis
   artifactUrl: string | null
 }
 
-export function Storyboard({ analysis, artifactUrl }: StoryboardProps) {
+export function Storyboard({
+  analysis,
+  artifactUrl,
+  sample = false,
+}: StoryboardProps) {
   const isFallback = analysis.generationMode === 'deterministic_fallback'
   const hasUserArtwork = analysis.artworkProvider === 'cloudflare_byok'
 
@@ -15,7 +20,6 @@ export function Storyboard({ analysis, artifactUrl }: StoryboardProps) {
     <section className="storyboard" aria-labelledby="storyboard-title">
       <div className="section-heading">
         <div>
-          <span className="eyebrow">Grounded explanation</span>
           <h2 id="storyboard-title">The code, explained as a story</h2>
         </div>
         <span className="confidence-pill">
@@ -27,18 +31,27 @@ export function Storyboard({ analysis, artifactUrl }: StoryboardProps) {
       {isFallback ? (
         <div className="notice notice--fallback" role="status">
           <strong>
-            {hasUserArtwork
-              ? 'Local structural preview · user-funded AI artwork'
-              : 'Local structural preview'}
+            {sample
+              ? 'Illustrative sample · no API calls'
+              : hasUserArtwork
+                ? 'Local structural preview · user-funded AI artwork'
+                : 'Local structural preview'}
           </strong>
           <p>
-            This preview scans representative files at one repository commit and
-            explains their detected structure without an OpenAI API call.{' '}
-            {hasUserArtwork
-              ? 'Panel images were generated using your Cloudflare credentials.'
-              : 'Artwork uses bundled visual templates.'}{' '}
-            It explains detected code behavior and flow, but not unstated
-            business intent.
+            {sample ? (
+              'This bundled story shows how the interface works. The example files and claims are illustrative; no repository was fetched or verified.'
+            ) : (
+              <>
+                This preview scans representative files at one repository commit
+                and explains their detected structure without an OpenAI API
+                call.{' '}
+                {hasUserArtwork
+                  ? 'Panel images were generated using your Cloudflare credentials.'
+                  : 'Artwork uses bundled visual templates.'}{' '}
+                It explains detected code behavior and flow, but not unstated
+                business intent.
+              </>
+            )}
           </p>
         </div>
       ) : null}

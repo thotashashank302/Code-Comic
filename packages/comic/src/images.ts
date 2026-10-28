@@ -161,7 +161,7 @@ function cloudflarePanelPrompt(
     analysis.sharedVisualStyle,
     panel.scenePrompt,
     `Panel ${panel.sequence} purpose: ${panel.purpose}.`,
-    'Wide cinematic editorial comic illustration, clear single focal subject, strong visual storytelling, polished flat vector shapes, deep indigo and near-black palette, violet-blue glow, one sparse amber accent, high contrast, generous negative space.',
+    'Wide cinematic editorial comic illustration, clear single focal subject, strong visual storytelling, polished flat vector shapes, light ivory palette with chartreuse, blush pink, cool blue and peach surfaces, dark green linework, high contrast, generous negative space.',
     'No visible text, letters, numbers, code, labels, logos, signatures, speech bubbles, signs, UI screenshots, or watermarks.',
   ]
     .join('\n\n')
@@ -303,7 +303,7 @@ export async function generatePanelArtwork(input: {
       const prompt = [
         input.analysis.sharedVisualStyle,
         panel.scenePrompt,
-        'Flat vector editorial illustration in a deep indigo and near-black palette, with violet-blue glow and one sparse amber accent. No text, letters, numbers, labels, code, logos, signatures, speech bubbles, signs, or watermarks. Leave visual breathing room for captions that will be added separately.',
+        'Flat vector editorial illustration in a light ivory palette with chartreuse, blush pink, cool blue and peach surfaces, with dark green linework. No text, letters, numbers, labels, code, logos, signatures, speech bubbles, signs, or watermarks. Leave visual breathing room for captions that will be added separately.',
       ].join('\n\n')
       const response = await openai.images.generate({
         model: imageModel,
@@ -332,40 +332,24 @@ export async function generatePanelArtwork(input: {
 export async function createStoryboardFallbackArtwork(
   analysis: ComicAnalysis,
 ): Promise<GeneratedPanelArtwork[]> {
-  const accents = ['#5459ff', '#a13cff', '#2f88ff', '#ffb53e']
-
+  const colors = [
+    { paper: '#e9efcc', ink: '#607f43', soft: '#ccddaf' },
+    { paper: '#f5dfe8', ink: '#a16f86', soft: '#e7bfcf' },
+    { paper: '#dce9ee', ink: '#527984', soft: '#bfd5df' },
+    { paper: '#f6e8d6', ink: '#a1834e', soft: '#e8d2ae' },
+  ]
   return Promise.all(
     analysis.panels.map(async (panel, index) => {
-      const accent = accents[index]!
-      const nextAccent = accents[(index + 1) % accents.length]!
-      const svg = Buffer.from(`
-        <svg width="1536" height="1024" viewBox="0 0 1536 1024" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <radialGradient id="glow" cx="50%" cy="45%" r="58%">
-              <stop offset="0%" stop-color="${accent}" stop-opacity="0.72" />
-              <stop offset="58%" stop-color="#11116d" stop-opacity="0.36" />
-              <stop offset="100%" stop-color="#05050d" stop-opacity="0" />
-            </radialGradient>
-            <linearGradient id="line" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="${accent}" />
-              <stop offset="100%" stop-color="${nextAccent}" />
-            </linearGradient>
-          </defs>
-          <rect width="1536" height="1024" fill="#05050d" />
-          <ellipse cx="768" cy="470" rx="620" ry="430" fill="url(#glow)" />
-          <g fill="none" stroke="url(#line)" stroke-width="12" stroke-linecap="round" opacity="0.9">
-            <path d="M190 650 C430 300 640 770 850 410 S1190 310 1360 590" />
-            <path d="M210 740 C480 440 650 860 920 530 S1220 430 1340 680" opacity="0.44" />
-          </g>
-          <g fill="${accent}">
-            <circle cx="190" cy="650" r="24" />
-            <circle cx="850" cy="410" r="32" />
-            <circle cx="1360" cy="590" r="24" />
-          </g>
-          <circle cx="768" cy="470" r="122" fill="#080814" stroke="${nextAccent}" stroke-width="10" />
-          <path d="M708 470 L753 515 L842 418" fill="none" stroke="#ffffff" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-      `)
+      const { paper, ink, soft } = colors[index]!
+      const diagrams = [
+        `<rect x="310" y="190" width="620" height="540" rx="42" fill="#fff"/><rect x="366" y="270" width="205" height="22" rx="11" fill="${ink}"/><rect x="366" y="340" width="498" height="76" rx="18" fill="${paper}"/><rect x="366" y="451" width="498" height="76" rx="18" fill="${paper}"/><rect x="366" y="569" width="195" height="66" rx="33" fill="${ink}"/><path d="M974 453h240m-58-58 58 58-58 58" fill="none" stroke="${ink}" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>`,
+        `<rect x="354" y="210" width="827" height="514" rx="40" fill="#fff"/>${[0, 1, 2].map((n) => `<circle cx="452" cy="${320 + n * 144}" r="34" fill="${soft}"/><path d="m435 ${320 + n * 144} 12 12 23-27" stroke="${ink}" stroke-width="9" fill="none" stroke-linecap="round"/><rect x="523" y="${299 + n * 144}" width="${477 - n * 72}" height="21" rx="10" fill="${ink}"/><rect x="523" y="${337 + n * 144}" width="${300 + n * 26}" height="14" rx="7" fill="${soft}"/>`).join('')}`,
+        `<rect x="327" y="180" width="300" height="447" rx="32" fill="#fff"/><rect x="380" y="240" width="196" height="24" rx="12" fill="${ink}"/><rect x="380" y="306" width="170" height="15" rx="7" fill="${soft}"/><rect x="380" y="351" width="150" height="15" rx="7" fill="${soft}"/><path d="M674 411h147m-41-41 41 41-41 41" fill="none" stroke="${ink}" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>${[0, 1, 2].map((n) => `<rect x="871" y="${192 + n * 158}" width="349" height="126" rx="24" fill="#fff"/><circle cx="927" cy="${256 + n * 158}" r="18" fill="${soft}"/><rect x="971" y="${244 + n * 158}" width="185" height="17" rx="8" fill="${ink}"/>`).join('')}`,
+        `<rect x="310" y="180" width="848" height="550" rx="40" fill="#fff"/><rect x="368" y="245" width="305" height="27" rx="13" fill="${ink}"/>${[0, 1, 2].map((n) => `<rect x="368" y="${330 + n * 106}" width="727" height="77" rx="17" fill="${paper}"/><rect x="394" y="${353 + n * 106}" width="240" height="12" rx="6" fill="${ink}"/><rect x="394" y="${377 + n * 106}" width="143" height="9" rx="4" fill="${soft}"/>`).join('')}<circle cx="1150" cy="213" r="90" fill="${ink}"/><path d="m1110 211 27 27 54-62" fill="none" stroke="#fff" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>`,
+      ]
+      const svg = Buffer.from(
+        `<svg width="1536" height="1024" viewBox="0 0 1536 1024" xmlns="http://www.w3.org/2000/svg"><rect width="1536" height="1024" fill="${paper}"/><circle cx="1410" cy="60" r="335" fill="${soft}" opacity=".36"/><circle cx="80" cy="980" r="270" fill="${soft}" opacity=".25"/>${diagrams[index]}</svg>`,
+      )
 
       return {
         sequence: panel.sequence,

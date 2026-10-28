@@ -52,6 +52,17 @@ const nextConfig: NextConfig = {
         headers: securityHeaders,
       },
       {
+        source: '/extension-preview/:path*',
+        headers: [
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          {
+            key: 'Content-Security-Policy',
+            value:
+              "default-src 'self'; base-uri 'none'; connect-src 'none'; font-src 'self'; frame-ancestors 'self'; img-src 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'",
+          },
+        ],
+      },
+      {
         source: '/share/:path*',
         headers: [
           { key: 'Cache-Control', value: 'private, no-store, max-age=0' },

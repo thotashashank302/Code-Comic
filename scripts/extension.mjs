@@ -1,5 +1,12 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import {
+  existsSync,
+  cpSync,
+  mkdirSync,
+  rmSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const envPath = fileURLToPath(new URL('../.env', import.meta.url))
@@ -22,4 +29,22 @@ const result = spawnSync(
   },
 )
 if (result.error) throw result.error
+if (result.status === 0) {
+  const preview = new URL(
+    '../apps/web/public/extension-preview/',
+    import.meta.url,
+  )
+  rmSync(preview, { recursive: true, force: true })
+  mkdirSync(preview, { recursive: true })
+  cpSync(
+    new URL('../apps/extension/.output/chrome-mv3/', import.meta.url),
+    preview,
+    { recursive: true },
+  )
+  const html = new URL('sidepanel.html', preview)
+  writeFileSync(
+    html,
+    readFileSync(html, 'utf8').replace(/(src|href)="\//g, '$1="./'),
+  )
+}
 process.exit(result.status ?? 1)

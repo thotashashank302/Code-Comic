@@ -9,3 +9,5 @@ pnpm-lock.yaml
 apps/web/next-env.d.ts
 .env.example
 supabase/migrations/*.sql
+
+apps/web/public/extension-preview
