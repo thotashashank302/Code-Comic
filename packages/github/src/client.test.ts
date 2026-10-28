@@ -78,3 +78,120 @@ describe('repository ref resolution', () => {
     expect(request).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('public repository failure handling', () => {
+  it('can read public repositories without constructing a GitHub App', async () => {
+    const client = new GitHubAppClient()
+    await expect(client.getRepositoryOctokit('owner', 'repo')).rejects.toThrow(
+      'not configured',
+    )
+    expect(
+      await client.getRepositoryOctokit('owner', 'repo', true),
+    ).toBeDefined()
+  })
+
+  it('rejects a truncated tree rather than describing a partial tree as complete', async () => {
+    const { client, request } = setup()
+    request
+      .mockReset()
+      .mockResolvedValue({ data: { truncated: true, tree: [] } })
+    await expect(
+      client.listRepositoryFiles(
+        {
+          owner: 'owner',
+          repository: 'repo',
+          description: '',
+          defaultBranch: 'main',
+          resolvedRef: 'main',
+          commitSha: commit.sha,
+          treeSha: commit.commit.tree.sha,
+          isPrivate: false,
+          htmlUrl: repository.html_url,
+        },
+        true,
+      ),
+    ).rejects.toThrow('repository_tree_truncated')
+  })
+
+  it('propagates source-fetch rate limits instead of silently dropping files', async () => {
+    const { client, request } = setup()
+    request.mockReset().mockRejectedValue({ status: 403 })
+    await expect(
+      client.readRepositoryFiles({
+        snapshot: {
+          owner: 'owner',
+          repository: 'repo',
+          description: '',
+          defaultBranch: 'main',
+          resolvedRef: 'main',
+          commitSha: commit.sha,
+          treeSha: commit.commit.tree.sha,
+          isPrivate: false,
+          htmlUrl: repository.html_url,
+        },
+        files: [{ path: 'main.ts', size: 100, sha: commit.sha }],
+        allowPublicFallback: true,
+      }),
+    ).rejects.toMatchObject({ status: 403 })
+  })
+})
+
+it('reads anonymous public source at an immutable raw URL without consuming a contents API request', async () => {
+  const client = new GitHubAppClient()
+  const fetch = vi
+    .fn()
+    .mockResolvedValue(new Response('export const password = "example"'))
+  vi.stubGlobal('fetch', fetch)
+  try {
+    const files = await client.readRepositoryFiles({
+      snapshot: {
+        owner: 'owner',
+        repository: 'repo',
+        description: '',
+        defaultBranch: 'main',
+        resolvedRef: 'main',
+        commitSha: commit.sha,
+        treeSha: commit.commit.tree.sha,
+        isPrivate: false,
+        htmlUrl: repository.html_url,
+      },
+      files: [{ path: 'src/file name.ts', size: 100, sha: commit.sha }],
+      allowPublicFallback: true,
+    })
+    expect(fetch.mock.calls[0]?.[0]).toBe(
+      `https://raw.githubusercontent.com/owner/repo/${commit.sha}/src/file%20name.ts`,
+    )
+    expect(files).toHaveLength(1)
+  } finally {
+    vi.unstubAllGlobals()
+  }
+})
+
+it('bounds streamed raw public source responses', async () => {
+  const client = new GitHubAppClient()
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(new Response('x'.repeat(750_001))),
+  )
+  try {
+    await expect(
+      client.readRepositoryFiles({
+        snapshot: {
+          owner: 'owner',
+          repository: 'repo',
+          description: '',
+          defaultBranch: 'main',
+          resolvedRef: 'main',
+          commitSha: commit.sha,
+          treeSha: commit.commit.tree.sha,
+          isPrivate: false,
+          htmlUrl: repository.html_url,
+        },
+        files: [{ path: 'main.ts', size: 100, sha: commit.sha }],
+        allowPublicFallback: true,
+      }),
+    ).rejects.toThrow('size limit')
+  } finally {
+    vi.unstubAllGlobals()
+  }
+})

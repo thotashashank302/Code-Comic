@@ -48,6 +48,22 @@ function friendlyError(code: string) {
     return code
   }
   const messages: Record<string, string> = {
+    github_rate_limited:
+      'GitHub request limit reached. Wait for it to reset, or configure an optional GITHUB_TOKEN for a higher limit.',
+    github_token_invalid:
+      'The configured GITHUB_TOKEN is invalid or expired. Replace or remove it, then restart.',
+    repository_too_large:
+      'GitHub returned an incomplete tree for this large repository. Try a smaller repository.',
+    local_public_only:
+      'Local mode supports public repositories. Use hosted mode with GitHub sign-in for private code.',
+    local_busy:
+      'Another comic operation is still running. Wait for it to finish, then retry.',
+    local_storage_full:
+      'You have 100 saved comics. Delete an older comic before creating another.',
+    comic_not_found: 'This comic expired or was deleted. Generate it again.',
+    local_request_failed:
+      'The local request failed. Check your internet connection and that the comic data directory is writable, then retry.',
+
     authentication_required: 'Connect GitHub to continue.',
     invalid_repository_url: 'Paste a full GitHub repository URL.',
     repository_changed:
@@ -111,6 +127,8 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 export function ComicCodeApp() {
   const [user, setUser] = useState<User | null>(null)
   const [authChecked, setAuthChecked] = useState(false)
+  const [localMode, setLocalMode] = useState(false)
+  const [recent, setRecent] = useState<Explanation[]>([])
   const [repositoryUrl, setRepositoryUrl] = useState('')
   const [repository, setRepository] = useState<Repository | null>(null)
   const [explanation, setExplanation] = useState<Explanation | null>(null)
@@ -129,10 +147,20 @@ export function ComicCodeApp() {
 
   useEffect(() => {
     const controller = new AbortController()
-    api<{ user: User | null }>('/api/v1/auth/me', {
+    api<{ user: User | null; mode?: string }>('/api/v1/auth/me', {
       signal: controller.signal,
     })
-      .then((result) => setUser(result.user))
+      .then(async (result) => {
+        setUser(result.user)
+        setLocalMode(result.mode === 'local')
+        if (result.mode === 'local') {
+          const saved = await api<{ explanations: Explanation[] }>(
+            '/api/v1/explanations',
+            { signal: controller.signal },
+          )
+          setRecent(saved.explanations)
+        }
+      })
       .catch(() => setUser(null))
       .finally(() => setAuthChecked(true))
     return () => controller.abort()
@@ -222,6 +250,11 @@ export function ComicCodeApp() {
         },
       )
       setExplanation(result.explanation)
+      if (localMode)
+        setRecent((rows) => [
+          result.explanation,
+          ...rows.filter((row) => row.id !== result.explanation.id),
+        ])
     } catch (caught) {
       pendingCloudflare.current = false
       setAiGenerationRequested(false)
@@ -289,6 +322,7 @@ export function ComicCodeApp() {
           ),
         )
       } finally {
+        setAiGenerationRequested(false)
         setArtworkBusy(false)
       }
     },
@@ -323,9 +357,22 @@ export function ComicCodeApp() {
     ) {
       return
     }
-    await api(`/api/v1/explanations/${explanation.id}`, { method: 'DELETE' })
-    setExplanation(null)
-    setAiGenerationRequested(false)
+    setBusy(true)
+    setError(null)
+    try {
+      await api(`/api/v1/explanations/${explanation.id}`, { method: 'DELETE' })
+      setRecent((rows) => rows.filter((row) => row.id !== explanation.id))
+      setExplanation(null)
+      setAiGenerationRequested(false)
+    } catch (caught) {
+      setError(
+        friendlyError(
+          caught instanceof Error ? caught.message : 'request_failed',
+        ),
+      )
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -336,9 +383,13 @@ export function ComicCodeApp() {
           <span>comic code</span>
         </a>
         <div className="topbar__meta">
-          <span className="hackathon-tag">OpenAI Build Week</span>
+          <span className="hackathon-tag">
+            {localMode ? 'Free local mode' : 'Repository comics'}
+          </span>
           {authChecked && user ? (
-            <span className="user-chip">@{user.login}</span>
+            <span className="user-chip">
+              {localMode ? 'On your computer' : `@${user.login}`}
+            </span>
           ) : null}
         </div>
       </nav>
@@ -355,7 +406,11 @@ export function ComicCodeApp() {
             understand—without exposing source in storage.
           </p>
           <div className="trust-row">
-            <span>Read-only GitHub App</span>
+            <span>
+              {localMode
+                ? 'Public repositories · no sign-in'
+                : 'Read-only GitHub App'}
+            </span>
             <span>Evidence-linked claims</span>
             <span>Private by default</span>
           </div>
@@ -368,10 +423,14 @@ export function ComicCodeApp() {
       <section className="workspace" aria-labelledby="workspace-title">
         <div className="workspace__header">
           <div>
-            <span className="eyebrow">Try the hosted demo</span>
+            <span className="eyebrow">
+              {localMode ? 'Runs on your computer' : 'Hosted workspace'}
+            </span>
             <h2 id="workspace-title">Explain a repository</h2>
           </div>
-          <span className="step-label">01 · Connect</span>
+          <span className="step-label">
+            {localMode ? 'Inspect → generate → download' : '01 · Connect'}
+          </span>
         </div>
 
         <div className="url-control">
@@ -381,7 +440,12 @@ export function ComicCodeApp() {
               id="repository-url"
               type="url"
               value={repositoryUrl}
-              onChange={(event) => setRepositoryUrl(event.target.value)}
+              onChange={(event) => {
+                setRepositoryUrl(event.target.value)
+                setRepository(null)
+                setError(null)
+              }}
+              disabled={busy || artworkBusy}
               placeholder="https://github.com/owner/repository"
               autoComplete="url"
             />
@@ -389,12 +453,67 @@ export function ComicCodeApp() {
               className="primary-button"
               type="button"
               onClick={inspectRepository}
-              disabled={busy || !repositoryUrl.trim()}
+              disabled={
+                !authChecked || busy || artworkBusy || !repositoryUrl.trim()
+              }
             >
-              {user ? 'Inspect repository' : 'Connect GitHub'}
+              {!authChecked
+                ? 'Loading…'
+                : busy
+                  ? 'Working…'
+                  : user
+                    ? 'Inspect repository'
+                    : 'Connect GitHub'}
             </button>
           </div>
         </div>
+
+        {localMode ? (
+          <p className="byok-privacy">
+            Free structural analysis and bundled artwork. Public repositories
+            only. Comics stay on this computer for 30 days; download a PNG to
+            keep one. Optional Cloudflare AI uses your account’s quota.
+          </p>
+        ) : null}
+        {localMode && recent.length ? (
+          <div className="url-control">
+            <label htmlFor="recent-comic">Saved comics</label>
+            <select
+              id="recent-comic"
+              value={explanation?.id ?? ''}
+              disabled={busy || artworkBusy}
+              onChange={async (event) => {
+                const id = event.target.value
+                if (!id) {
+                  setExplanation(null)
+                  return
+                }
+                setError(null)
+                try {
+                  const result = await api<{ explanation: Explanation }>(
+                    `/api/v1/explanations/${id}`,
+                  )
+                  setExplanation(result.explanation)
+                } catch (caught) {
+                  setError(
+                    friendlyError(
+                      caught instanceof Error
+                        ? caught.message
+                        : 'request_failed',
+                    ),
+                  )
+                }
+              }}
+            >
+              <option value="">Choose a saved comic</option>
+              {recent.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {row.repository} · {row.commitSha.slice(0, 7)}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
 
         {error ? (
           <div className="notice notice--error" role="alert">
@@ -440,7 +559,7 @@ export function ComicCodeApp() {
                 className="primary-button primary-button--amber"
                 type="button"
                 onClick={generate}
-                disabled={busy}
+                disabled={busy || artworkBusy}
               >
                 {busy
                   ? 'Preparing source preview…'
@@ -520,7 +639,7 @@ export function ComicCodeApp() {
                   className="primary-button"
                   type="button"
                   onClick={() => void generateWithCloudflare(explanation)}
-                  disabled={!cloudflareReady || artworkBusy}
+                  disabled={!cloudflareReady || artworkBusy || busy}
                 >
                   {artworkBusy
                     ? 'Analyzing code and generating 4 panels…'
@@ -602,16 +721,20 @@ export function ComicCodeApp() {
                     Download PNG
                   </a>
                 ) : null}
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={createShare}
-                >
-                  Copy private share link
-                </button>
+                {!localMode ? (
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={createShare}
+                    disabled={busy || artworkBusy}
+                  >
+                    Copy private share link
+                  </button>
+                ) : null}
                 <button
                   className="text-button text-button--danger"
                   type="button"
+                  disabled={busy || artworkBusy}
                   onClick={removeExplanation}
                 >
                   Delete

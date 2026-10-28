@@ -1,6 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["NEXT_PUBLIC_APP_URL"],
+  "globalEnv": ["NEXT_PUBLIC_APP_URL", "WXT_PUBLIC_API_BASE_URL"],
   "globalPassThroughEnv": [
     "GITHUB_APP_ID",
     "GITHUB_CLIENT_ID",
@@ -14,7 +14,11 @@
     "SAFETY_IDENTIFIER_SECRET",
     "SESSION_ENCRYPTION_SECRET",
     "TRIGGER_SECRET_KEY",
-    "CRON_SECRET"
+    "CRON_SECRET",
+    "COMIC_CODE_MODE",
+    "COMIC_CODE_DATA_DIR",
+    "GITHUB_TOKEN",
+    "WXT_PUBLIC_API_BASE_URL"
   ],
   "tasks": {
     "build": {
@@ -42,7 +46,7 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
+      "outputs": []
     },
     "typecheck": {
       "dependsOn": ["^typecheck"]

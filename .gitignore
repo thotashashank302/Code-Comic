@@ -25,3 +25,6 @@ test-results/
 .DS_Store
 coverage/
 .vercel
+
+# Single-user local comics (never commit generated content)
+.comic-code/

@@ -107,6 +107,22 @@ function friendlyError(value: string) {
     return value
   }
   const messages: Record<string, string> = {
+    github_rate_limited:
+      'GitHub request limit reached. Wait for it to reset, or configure an optional GITHUB_TOKEN for a higher limit.',
+    github_token_invalid:
+      'The configured GITHUB_TOKEN is invalid or expired. Replace or remove it, then restart.',
+    repository_too_large:
+      'GitHub returned an incomplete tree for this large repository. Try a smaller repository.',
+    local_public_only:
+      'Local mode supports public repositories. Use hosted mode with GitHub sign-in for private code.',
+    local_busy:
+      'Another comic operation is still running. Wait for it to finish, then retry.',
+    local_storage_full:
+      'You have 100 saved comics. Delete an older comic before creating another.',
+    comic_not_found: 'This comic expired or was deleted. Generate it again.',
+    local_request_failed:
+      'The local request failed. Check your internet connection and that the comic data directory is writable, then retry.',
+
     authentication_required: 'Connect GitHub to explain this repository.',
     repository_changed:
       'This repository branch moved. Inspect it again before generating.',
@@ -173,12 +189,20 @@ async function requestApi<T>(
     throw new Error(
       data.detail ?? data.error ?? `request_failed_${response.status}`,
     )
-  return data
+  const result = data as T & { explanation?: Explanation }
+  if (result.explanation?.artifactUrl) {
+    result.explanation.artifactUrl = new URL(
+      result.explanation.artifactUrl,
+      apiBase,
+    ).href
+  }
+  return result
 }
 
 function SidePanelShell() {
   const [coordinate, setCoordinate] = useState<Coordinate | null>(null)
   const [session, setSession] = useState<string | null>(null)
+  const [localMode, setLocalMode] = useState(false)
   const [repository, setRepository] = useState<Repository | null>(null)
   const [explanation, setExplanation] = useState<Explanation | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('explain')
@@ -215,7 +239,14 @@ function SidePanelShell() {
       const tabCoordinate = parseRepositoryUrl(tab?.url)
       if (!active) return
       setCoordinate(tabCoordinate ?? stored.comicCodeCoordinate ?? null)
-      setSession(stored.comicCodeSession ?? null)
+      const runtime = await requestApi<{ mode?: string }>(
+        '/api/v1/auth/me',
+        '',
+      ).catch(() => null)
+      if (!active) return
+      const local = runtime?.mode === 'local'
+      setLocalMode(local)
+      setSession(local ? 'local-desktop' : (stored.comicCodeSession ?? null))
       setCompact(stored.comicCodeCompact ?? false)
       setCloudflareAccountId(stored.comicCodeCloudflareAccountId ?? '')
       setCloudflareApiToken(stored.comicCodeCloudflareApiToken ?? '')
@@ -518,6 +549,7 @@ function SidePanelShell() {
           ),
         )
       } finally {
+        setAiGenerationRequested(false)
         setArtworkBusy(false)
       }
     },
@@ -878,8 +910,9 @@ function SidePanelShell() {
               className="secondary-action"
               type="button"
               onClick={createShare}
+              disabled={localMode || busy || artworkBusy}
             >
-              Copy share link
+              {localMode ? 'Sharing requires hosted mode' : 'Copy share link'}
             </button>
           </div>
           {notice ? (
@@ -926,7 +959,7 @@ function SidePanelShell() {
           Panel: {panelSide === 'unknown' ? 'browser setting' : panelSide} ·
           move in Chrome Appearance
         </button>
-        {session ? (
+        {session && !localMode ? (
           <button type="button" onClick={logout}>
             Sign out
           </button>

@@ -1,4 +1,26 @@
-# Security policy
+# Security
+
+## Local runtime
+
+The default runtime is a single-user desktop service. It accepts public GitHub
+repositories only, with no OAuth session or remote database. Its proxy and API
+handler reject non-loopback hosts and origins. Mutations require a same-port
+loopback origin or a Chrome extension origin; bearer strings do not bypass this
+check. This trusts locally installed browser extensions and local processes.
+It is not an authentication boundary against another user on the same computer.
+Use `pnpm dev` or `next start --hostname 127.0.0.1`; do not expose it through a
+tunnel or reverse proxy. Vercel defaults to hosted mode and requires the hosted
+credentials. The `/api/local` handler returns 404 in hosted mode.
+
+Local persistence contains sanitized analysis, evidence locators and PNG bytes,
+never source or provider credentials. Writes replace complete records atomically
+using owner-only file permissions. One server process per data directory is
+supported, with one mutation at a time. Expired records are removed lazily on
+read/list, including their PNG bytes. Local deletion removes the complete file.
+Downloaded copies cannot be revoked. Online capability sharing is unavailable
+in local mode. See the README for storage and generation limits.
+
+## Hosted runtime
 
 ## Scope
 

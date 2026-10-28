@@ -13,7 +13,8 @@ overrides:
   'baseline-browser-mapping@<2.11.0': '2.11.0'
   'nanoid@>=3.0.0 <3.3.18': '3.3.18'
 
-  'sharp@<0.35.4': '0.35.4'
+  'sharp@<0.35.5': '0.35.5'
+  'source-map-js@<1.2.2': '1.2.2'
 
 allowBuilds:
   '@depot/cli': false

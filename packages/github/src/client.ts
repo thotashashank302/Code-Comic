@@ -37,10 +37,52 @@ function decodeContent(data: unknown): string {
   return Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString('utf8')
 }
 
-export class GitHubAppClient {
-  readonly #app: App
+async function readPublicSource(
+  snapshot: RepositorySnapshot,
+  file: RepositoryTreeFile,
+) {
+  const segments = [
+    snapshot.owner,
+    snapshot.repository,
+    snapshot.commitSha,
+    ...file.path.split('/'),
+  ]
+  const response = await fetch(
+    `https://raw.githubusercontent.com/${segments.map(encodeURIComponent).join('/')}`,
+    {
+      signal: AbortSignal.timeout(20_000),
+      redirect: 'error',
+    },
+  )
+  if (!response.ok) {
+    throw Object.assign(new Error('Public source request failed'), {
+      status: response.status,
+    })
+  }
+  if (!response.body) throw new Error('Public source response was empty')
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let size = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      size += value.length
+      if (size > 750_000)
+        throw new Error('Public source exceeds the size limit')
+      chunks.push(value)
+    }
+  } finally {
+    await reader.cancel()
+  }
+  return Buffer.concat(chunks).toString('utf8')
+}
 
-  constructor(config: GitHubAppConfig) {
+export class GitHubAppClient {
+  readonly #app: App | undefined
+
+  constructor(config?: GitHubAppConfig) {
+    if (!config) return
     const privateKey = Buffer.from(config.privateKeyBase64, 'base64').toString(
       'utf8',
     )
@@ -53,6 +95,13 @@ export class GitHubAppClient {
     allowPublicFallback = false,
     fallbackAccessToken?: string,
   ) {
+    if (!this.#app) {
+      if (!allowPublicFallback) throw new Error('GitHub App is not configured')
+      return new Octokit({
+        ...(fallbackAccessToken ? { auth: fallbackAccessToken } : {}),
+        request: { timeout: 20_000 },
+      })
+    }
     try {
       return await this.#app.getInstallationOctokit(
         await this.getInstallationId(owner, repository),
@@ -66,6 +115,7 @@ export class GitHubAppClient {
   }
 
   async getInstallationId(owner: string, repository: string) {
+    if (!this.#app) throw new Error('GitHub App is not configured')
     const response = await this.#app.octokit.request(
       'GET /repos/{owner}/{repo}/installation',
       { owner, repo: repository },
@@ -176,6 +226,9 @@ export class GitHubAppClient {
       },
     )
 
+    if (response.data.truncated) {
+      throw new Error('repository_tree_truncated')
+    }
     return response.data.tree
       .filter(
         (
@@ -217,6 +270,19 @@ export class GitHubAppClient {
       const results = await Promise.all(
         batch.map(async (file) => {
           try {
+            if (
+              input.allowPublicFallback &&
+              !input.snapshot.isPrivate &&
+              !input.fallbackAccessToken &&
+              !this.#app
+            ) {
+              return {
+                ...file,
+                maskedSource: maskSecrets(
+                  await readPublicSource(input.snapshot, file),
+                ),
+              }
+            }
             const response = await octokit.request(
               'GET /repos/{owner}/{repo}/contents/{path}',
               {
@@ -230,7 +296,9 @@ export class GitHubAppClient {
               ...file,
               maskedSource: maskSecrets(decodeContent(response.data)),
             }
-          } catch {
+          } catch (error) {
+            // Rate limits and outages are actionable failures, not empty code.
+            if (githubRequestStatus(error) !== 404) throw error
             return null
           }
         }),

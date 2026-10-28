@@ -1,206 +1,120 @@
 # Comic Code
 
-Comic Code maps an entire GitHub repository, selects representative architecture files, and turns what the system does into a grounded four-panel comic for people who do not code. It includes a Chrome side-panel extension, a hosted Next.js demo, private Supabase storage, durable Trigger.dev jobs, and optional user-funded Cloudflare AI generation.
+Turn a public GitHub repository into a four-panel comic with evidence links.
+The default local mode runs on your computer: no login, database account,
+background-worker account, AI key, or hosting subscription is required.
 
-Built for the OpenAI Build Week hackathon in the **Work & Productivity** category.
+## Start
 
-## What works
+Install Node.js 24+ and pnpm 11.11.0, then run from this repository:
 
-- Public and private GitHub repositories.
-- Native Chrome 114+ side panel with an injected **Explain Repository** button.
-- GitHub App OAuth with state + PKCE and encrypted seven-hour sessions.
-- Read-only repository access; private repositories require a GitHub App installation.
-- Safe public-repository fallback without requiring an installation.
-- Recursive repository-tree scan capped at 5,000 entries, with up to 40 representative files selected across major directories.
-- Sensitive-file exclusion, secret masking, and high-entropy token detection.
-- Immutable commit capture, architecture-aware file ranking, and a 150,000-character source evidence budget.
-- API-free structural scan that detects languages, control flow, validation, async work, data access, UI state, security checks, and tests.
-- Optional Cloudflare BYOK pipeline: Llama analyzes and verifies transient code context, then FLUX creates four distinct panels using the user's own Workers AI allocation; creator credits are never used as a hidden fallback.
-- Bundled visual-template fallback when artwork credentials or quota are unavailable.
-- Private PNG storage, short-lived downloads, seven-day revocable share links, and deletion.
-- Daily retention cleanup and a 25-generation-per-user safety limit.
-- Desktop, mobile, and narrow side-panel layouts using the supplied indigo visual direction.
+```bash
+pnpm install --frozen-lockfile
+pnpm dev
+```
 
-## Repository layout
+Open **http://127.0.0.1:3000**, paste a GitHub repository URL, inspect it, and
+choose **Generate fixed comic**. Download the PNG or reopen it from **Saved
+comics** after a restart. Leave the Cloudflare fields empty for the free flow.
+
+The free result uses bounded structural analysis and bundled artwork. It
+identifies patterns in sampled files; it does not provide AI semantic analysis
+or prove that the repository is correct. A scan selects up to 40 files and
+150,000 characters at the inspected commit. Branches containing slashes work.
+
+## What “free” means
+
+- Local generation, storage and PNG export make no paid API calls.
+- GitHub access still needs internet. Anonymous REST access has a limit of
+  [60 requests per hour per IP](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api).
+  A large scan can use most of that allowance. An optional server-side
+  `GITHUB_TOKEN` raises the limit; no token is needed to start.
+- Optional Cloudflare semantic analysis and four generated images use **your**
+  account and may require a paid plan or consume paid quota. They are never
+  called unless you supply credentials and request AI generation. Check
+  [Cloudflare pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/).
+  A failed AI request preserves the completed free comic.
+- Public hosting, private repository login and online share links need the
+  separate [hosted setup](docs/HOSTED_SETUP.md). Their free tiers are limited;
+  unlimited hosted AI generation is not promised.
+
+## Local data and limits
+
+Local mode accepts public repositories only, even if the optional token can read
+private code. It is a single-user desktop server bound to loopback by `pnpm dev`.
+Requests using public hostnames and cross-site mutations are rejected. Installed
+Chrome extensions may access it through their declared localhost host permission.
+Do not tunnel or reverse-proxy local mode to the internet or run several server
+processes against the same data directory.
+
+Completed analysis, evidence locators and PNG bytes are saved atomically under
+`apps/web/.comic-code/` when launched with the commands above. Raw source and
+Cloudflare credentials are not persisted. The directory is ignored by Git;
+new directories/files use owner-only permissions where the OS supports them.
+Records expire after 30 days and are removed on the next read/list. There is a
+100-record storage cap and a 25-generation daily safety limit over retained
+records. Download comics you want to keep. Delete removes the local record and
+its PNG; it cannot revoke a previously downloaded copy.
+
+To adjust local configuration, copy `.env.example` to `.env`. Set
+`COMIC_CODE_DATA_DIR` to an absolute directory for a persistent disk location.
+Keep secrets in the ignored `.env`; never put tokens in public-prefixed variables.
+Use `COMIC_CODE_MODE=hosted` for the authenticated service-backed runtime.
+
+## Chrome extension
+
+Keep the local server running, then build:
+
+```bash
+pnpm extension:build
+# Or create a distributable ZIP:
+pnpm extension:zip
+```
+
+Load `apps/extension/.output/chrome-mv3` at `chrome://extensions` using
+**Developer mode → Load unpacked**. Open a GitHub repository and select its
+**Explain repository** button. The side panel detects the local server and
+needs no OAuth login. Local mode supports generation and PNG download; online
+sharing requires hosted mode. The extension saves Cloudflare credentials in
+Chrome local storage only when you enter them; use its removal control to clear
+them.
+
+For a hosted extension, set `WXT_PUBLIC_API_BASE_URL` to the final HTTPS origin
+before building. The manifest grants access to that exact API origin.
+
+## Project structure
 
 ```text
-apps/web          Next.js App Router site, API, OAuth, Trigger.dev task
-apps/extension    WXT Manifest V3 Chrome extension
-packages/comic    Analysis prompts, validation, artwork, PNG composition
-packages/contracts Shared Zod contracts
-packages/database Supabase repository and private storage operations
-packages/github   GitHub App client, source filtering, masking, evidence mapping
-supabase          CLI config and timestamped database migration
+apps/web/             Next.js UI, APIs, local runtime, optional hosted worker
+apps/extension/       Chrome Manifest V3 side panel and GitHub page integration
+packages/comic/       Grounded analysis, optional providers and PNG composition
+packages/contracts/   Shared request and response validation
+packages/github/      GitHub access, file selection, source masking and evidence
+packages/database/    Optional Supabase repository and private artifact storage
+supabase/             Hosted database migrations
+scripts/              Repeatable local extension packaging
+docs/                Setup, deployment and debugging evidence
+docs/archive/        Historical implementation and hackathon documents
 ```
 
-## Security model
-
-Raw source, reconstructed patches, and prompts containing source exist only in authenticated function or worker memory. They are never written to PostgreSQL, Storage, Trigger.dev payloads or outputs, audit metadata, analytics, or application logs.
-
-Cloudflare BYOK Account IDs and API tokens are accepted only by the authenticated code-analysis/artwork route over HTTPS. They remain in webpage tab memory or Chrome extension local storage, are never placed in Trigger.dev payloads, and are never persisted by Comic Code servers, databases, logs, or audit records. Masked selected code context is sent transiently to Cloudflare for Llama analysis and claim verification; FLUX then generates four images. The user's Cloudflare account pays for both text and image inference.
-
-The authenticated web request scans the inspected immutable commit while the GitHub OAuth token is available, masks source, and persists sanitized analysis and scan metadata. The worker receives only an explanation UUID and composes artwork from that analysis; recovery can rescan when analysis is missing. Raw source is never included in its payload. If a user supplies Cloudflare credentials, the authenticated web route refetches the same bounded repository evidence and sends it transiently to that user's Workers AI account.
-
-See [SECURITY.md](./SECURITY.md) for the threat model and residual considerations.
-
-## Prerequisites
-
-- Node.js 20.12+
-- pnpm 11.11.0
-- Chrome 114+
-- Optional Cloudflare account for user-funded semantic analysis and FLUX artwork
-- GitHub App
-- Supabase project
-- Trigger.dev project
-- Vercel project for the hosted demo
-
-## Environment setup
-
-The repository-level `.env` is ignored by Git. Copy the example and add real values locally:
+## Check and build
 
 ```bash
-cp .env.example .env
-```
-
-| Variable                    | Used by         | Notes                                                              |
-| --------------------------- | --------------- | ------------------------------------------------------------------ |
-| `NEXT_PUBLIC_APP_URL`       | Web             | `http://localhost:3000` locally; production HTTPS origin on Vercel |
-| `WXT_PUBLIC_API_BASE_URL`   | Extension build | Same origin as the hosted web app                                  |
-| `TRIGGER_SECRET_KEY`        | Web             | Trigger.dev DEV key locally, production key on Vercel              |
-| `TRIGGER_PROJECT_REF`       | Trigger config  | `proj_...` from the Trigger.dev dashboard                          |
-| `GITHUB_APP_ID`             | Web + worker    | Numeric GitHub App ID                                              |
-| `GITHUB_CLIENT_ID`          | Web             | GitHub App OAuth client ID                                         |
-| `GITHUB_CLIENT_SECRET`      | Web             | GitHub App OAuth client secret                                     |
-| `GITHUB_PRIVATE_KEY_BASE64` | Web + worker    | Entire GitHub App PEM encoded as one base64 line                   |
-| `GITHUB_WEBHOOK_SECRET`     | Web             | At least 32 random characters                                      |
-| `GITHUB_APP_SLUG`           | Web             | Slug used by the install URL                                       |
-| `NEXT_PUBLIC_SUPABASE_URL`  | Web + worker    | Project URL; no browser database access is used                    |
-| `SUPABASE_SECRET_KEY`       | Web + worker    | Server-side secret/service key only                                |
-| `SHARE_TOKEN_PEPPER`        | Web             | 32+ random bytes; changing it invalidates shares                   |
-| `SAFETY_IDENTIFIER_SECRET`  | Web + worker    | 32+ random bytes                                                   |
-| `SESSION_ENCRYPTION_SECRET` | Web             | 32+ random bytes; changing it signs everyone out                   |
-| `CRON_SECRET`               | Web             | 32+ random bytes; Vercel sends it to cron routes                   |
-
-Generate independent local secrets with `openssl rand -hex 32`. Do not reuse one value for multiple variables. Encode the GitHub PEM without line breaks, for example:
-
-```bash
-base64 < path/to/github-app.private-key.pem | tr -d '\n'
-```
-
-Only these variables belong in Trigger.dev: `GITHUB_APP_ID`, `GITHUB_PRIVATE_KEY_BASE64`, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SECRET_KEY`, and `SAFETY_IDENTIFIER_SECRET`.
-
-## GitHub App configuration
-
-Create a GitHub App with:
-
-- Homepage URL: `NEXT_PUBLIC_APP_URL`
-- Callback URL: `NEXT_PUBLIC_APP_URL/api/v1/auth/github/callback`
-- Webhook URL: `NEXT_PUBLIC_APP_URL/api/v1/github/webhooks`
-- Webhook secret: `GITHUB_WEBHOOK_SECRET`
-- Repository permissions: **Contents: Read-only**, **Pull requests: Read-only**, **Metadata: Read-only**
-- No write permissions
-- User authorization enabled
-- Expiring user access tokens enabled
-
-Public repositories work without installing the app. Private repositories require the user to install the app on that repository and still revalidate the signed-in user’s access.
-
-## Supabase setup
-
-The migration was created with Supabase CLI 2.109.1 and enables RLS/forced RLS, explicit service-role grants, constraints, indexes, retention fields, and a private 10 MB PNG bucket.
-
-```bash
-pnpm dlx supabase@2.109.1 login
-pnpm dlx supabase@2.109.1 link --project-ref YOUR_PROJECT_REF
-pnpm dlx supabase@2.109.1 db push
-```
-
-Do not paste the migration into the SQL editor manually. The application intentionally exposes no anon/authenticated table policies; all database access goes through authenticated server routes.
-
-## Trigger.dev setup
-
-From `apps/web`:
-
-```bash
-pnpm exec trigger login
-pnpm exec trigger dev
-```
-
-After the task appears in the dashboard, sync only the worker variables listed above. Deploy the task with:
-
-```bash
-pnpm exec trigger deploy
-```
-
-The task payload is `{ explanationId }`; it never includes source, patches, prompts, GitHub tokens, or captions.
-
-## Local development
-
-Install dependencies and run the web app:
-
-```bash
-pnpm install
-pnpm --filter @comic-code/web dev
-```
-
-In another terminal, run Trigger.dev as described above. For extension hot reload:
-
-```bash
-pnpm --filter @comic-code/extension dev
-```
-
-Load the generated extension directory from `chrome://extensions` → **Developer mode** → **Load unpacked**.
-
-Chrome controls whether side panels appear on the left or right. Comic Code reads the selected side and adapts its border treatment; users move it under Chrome **Settings → Appearance → Side panel**.
-
-### User-funded artwork
-
-Before generating, choose the image mode. Leave both fields empty for the fixed API-free comic, or provide:
-
-- Cloudflare Account ID.
-- API token with Workers AI Read and Workers AI Edit permissions.
-
-Web credentials live only in current tab memory. Extension credentials use `chrome.storage.local` until the user selects **Remove saved credentials** or uninstalls the extension. With a valid key, generation automatically creates the fixed preview first, then refetches and masks bounded source from the selected files, asks Cloudflare Llama for a grounded story plus independent claim verification, generates four distinct FLUX panels with separate prompts and seeds, composes a new PNG, then atomically replaces the preview. Failures leave the fixed comic unchanged.
-
-## Verification
-
-```bash
-pnpm typecheck
-pnpm lint
-pnpm test
+pnpm check
 pnpm audit --prod
-pnpm --filter @comic-code/web build
-pnpm --filter @comic-code/extension build
-pnpm --filter @comic-code/extension zip
+# With the local server running, check the real public GitHub flow:
+pnpm smoke:local
 ```
 
-Local verification for the merge-readiness fixes (2026-09-30):
+`pnpm check` runs tests, lint, formatting, web/extension production builds and
+TypeScript checks. The web production build uses webpack for compatibility with
+restricted build environments. To run the built web app locally:
 
-- Production dependency audit: no known vulnerabilities.
-- 44 unit/security/scanning/composition/route/migration tests passing.
-- TypeScript passing across all workspaces.
-- ESLint passing with zero warnings.
-- Next.js production build passing for every page and API route.
-- WXT Chrome MV3 build and ZIP passing.
-- Browser checks from the initial build covered 1280 px and 390 px. Authenticated hosted acceptance tests remain a separate release gate.
+```bash
+pnpm --filter @comic-code/web start --hostname 127.0.0.1
+```
 
-Live integration tests require real service credentials and test repositories; they cannot be meaningfully mocked as proof of deployment readiness.
+See [the debugging report](docs/DEBUGGING_REPORT.md) for reproduced defects,
+fixes, test results and the limits of hosted verification.
 
-## Deployment
-
-See [docs/DEPLOYMENT_CHECKLIST.md](./docs/DEPLOYMENT_CHECKLIST.md) for the exact order. In short:
-
-1. Push the Supabase migration.
-2. Deploy the Trigger.dev task and worker environment.
-3. Deploy `apps/web` on Vercel with the server environment.
-4. Update the GitHub App URLs to the production origin.
-5. Set `WXT_PUBLIC_API_BASE_URL` to the production origin and rebuild the extension.
-6. If using a custom domain instead of `*.vercel.app`, add its exact origin to `host_permissions` before the final extension build.
-
-Release artifacts are generated at:
-
-- Unpacked extension: `apps/extension/.output/chrome-mv3`
-- Chrome ZIP: `apps/extension/.output/comic-codeextension-0.1.0-chrome.zip`
-
-## License
-
-[MIT](./LICENSE)
+[Security model](SECURITY.md) · [Hosted deployment](docs/DEPLOYMENT_CHECKLIST.md) · [MIT license](LICENSE)

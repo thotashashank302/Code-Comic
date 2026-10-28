@@ -4,16 +4,20 @@
   "private": true,
   "packageManager": "pnpm@11.11.0",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=24"
   },
   "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev --parallel",
+    "build": "pnpm --filter @comic-code/web build && pnpm extension:build",
+    "dev": "pnpm --filter @comic-code/web dev --hostname 127.0.0.1",
     "lint": "turbo run lint",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "format:check": "prettier --check .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "extension:build": "node scripts/extension.mjs build",
+    "extension:zip": "node scripts/extension.mjs zip",
+    "check": "pnpm test && pnpm lint && pnpm format:check && pnpm build && pnpm typecheck",
+    "smoke:local": "node scripts/smoke-local.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.61.1",
