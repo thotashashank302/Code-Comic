@@ -177,6 +177,64 @@ describe('free local flow', () => {
     expect(JSON.stringify(record)).not.toContain('b'.repeat(40))
   })
 
+  it.each([
+    [401, 'image_provider_auth_failed'],
+    [429, 'image_provider_quota_reached'],
+    [503, 'cloudflare_analysis_failed'],
+  ])(
+    'handles a Cloudflare %i without losing the free comic or leaking the token',
+    async (status, code) => {
+      const { explanation } = await (
+        await handleLocalApi(request('/v1/explanations', 'POST', input))
+      ).json()
+      const original = await new LocalStore(directory).get(explanation.id)
+      const secret = 'test-workers-ai-token-never-persist'
+      const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+      const errors = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => undefined)
+      const upstream = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(
+          async () =>
+            new Response(`Rejected credential: ${secret}`, { status }),
+        )
+      const response = await handleLocalApi(
+        request(`/v1/explanations/${explanation.id}/artwork`, 'POST', {
+          provider: 'cloudflare',
+          accountId: 'a'.repeat(32),
+          apiToken: secret,
+        }),
+      )
+      expect(response.status).toBe(status === 503 ? 502 : status)
+      expect(await response.json()).toEqual({ error: code })
+      const [url, init] = upstream.mock.calls[0]!
+      expect(String(url)).toMatch(
+        /^https:\/\/api\.cloudflare\.com\/client\/v4\/accounts\/a{32}\/ai\/run\//,
+      )
+      expect(new Headers(init?.headers).get('Authorization')).toBe(
+        `Bearer ${secret}`,
+      )
+      expect(String(init?.body)).toContain(transientSource.split('\n')[0]!)
+      expect(String(init?.body)).not.toContain(secret)
+      expect(await new LocalStore(directory).get(explanation.id)).toEqual(
+        original,
+      )
+      expect(JSON.stringify(info.mock.calls)).not.toContain(secret)
+      expect(JSON.stringify(errors.mock.calls)).not.toContain(secret)
+      expect(
+        await readFile(path.join(directory, `${explanation.id}.json`), 'utf8'),
+      ).not.toContain(secret)
+      expect(
+        (
+          await handleLocalApi(
+            request(`/v1/explanations/${explanation.id}/download`),
+          )
+        ).status,
+      ).toBe(200)
+    },
+  )
+
   it('rejects a concurrent deletion while a generation owns the operation slot', async () => {
     const prepared = vi.mocked(prepareRepository).getMockImplementation()!
     let release: (() => void) | undefined

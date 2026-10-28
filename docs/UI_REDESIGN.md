@@ -8,8 +8,10 @@ use the same light surfaces, dark text and green actions. Plus Jakarta Sans is
 bundled locally with its SIL Open Font License; browsers need no Google request.
 
 Existing repository inspection, generation, evidence, download, deletion and
-optional Cloudflare controls remain available. Optional AI settings are collapsed
-until needed. Template artwork, AI artwork palette instructions, PNG composition and toolbar icons also use the
+optional Cloudflare controls remain available. **API key / BYOK** is available
+from the web navigation before a repository scan and below the extension header
+on every tab. Its disclosure shows Cloudflare Account ID and Workers AI API
+token fields; sample mode displays them disabled. Template artwork, AI artwork palette instructions, PNG composition and toolbar icons also use the
 new palette; old saved comics retain their original artwork.
 
 ## Reviewing without provider quota

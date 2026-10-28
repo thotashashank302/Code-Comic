@@ -341,7 +341,11 @@ export async function analyzeCloudflareComic(
       },
     }
   } catch (error) {
-    if (isCloudflareAnalysisFailure(error)) throw error
+    if (
+      error instanceof CloudflareArtworkError ||
+      isCloudflareAnalysisFailure(error)
+    )
+      throw error
     throw cloudflareAnalysisDiagnostic(
       'draft_validation',
       error instanceof Error ? error.message : 'analysis failed',

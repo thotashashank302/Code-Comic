@@ -143,6 +143,7 @@ export function ComicCodeApp() {
   const [artworkBusy, setArtworkBusy] = useState(false)
   const [artworkNotice, setArtworkNotice] = useState<string | null>(null)
   const [aiGenerationRequested, setAiGenerationRequested] = useState(false)
+  const cloudflareSettings = useRef<HTMLDetailsElement>(null)
   const pendingCloudflare = useRef(false)
   const cloudflareReady =
     cloudflareAccountId.trim().length === 32 &&
@@ -417,6 +418,12 @@ export function ComicCodeApp() {
         <div className="topbar-links">
           <a href="#workspace">Workspace</a>
           <a href="/extension">Extension preview</a>
+          <a
+            href="#api-key"
+            onClick={() => cloudflareSettings.current?.setAttribute('open', '')}
+          >
+            API key / BYOK
+          </a>
         </div>
         <span className="user-chip">
           {localMode
@@ -478,6 +485,114 @@ export function ComicCodeApp() {
             keep one. Optional Cloudflare AI uses your account’s quota.
           </p>
         ) : null}
+        <details
+          id="api-key"
+          ref={cloudflareSettings}
+          className="byok-card"
+          aria-labelledby="cloudflare-setup-title"
+        >
+          <summary>
+            <span>
+              <strong>API key / BYOK</strong>
+              <small>
+                Optional Cloudflare Workers AI · free comics need no key
+              </small>
+            </span>
+            <span aria-hidden="true">+</span>
+          </summary>
+          <div>
+            <h3 id="cloudflare-setup-title">Connect your Cloudflare account</h3>
+            <p>
+              Leave fields empty for fixed bundled comic images. Add your
+              Cloudflare Workers AI credentials for semantic code analysis and
+              four unique FLUX images charged only to your account.
+            </p>
+          </div>
+          {sampleMode ? (
+            <p className="byok-privacy" role="status">
+              Sample mode shows the key fields without using them. Inspect a
+              real repository to enable AI generation.
+            </p>
+          ) : null}
+          <div className="byok-fields">
+            <label htmlFor="cloudflare-account-id-setup">
+              Cloudflare Account ID
+              <input
+                id="cloudflare-account-id-setup"
+                value={cloudflareAccountId}
+                onChange={(event) => setCloudflareAccountId(event.target.value)}
+                placeholder="32-character Account ID"
+                disabled={sampleMode || artworkBusy}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </label>
+            <label htmlFor="cloudflare-api-token-setup">
+              Workers AI API token (not Global API key)
+              <input
+                id="cloudflare-api-token-setup"
+                type="password"
+                value={cloudflareApiToken}
+                onChange={(event) => setCloudflareApiToken(event.target.value)}
+                placeholder="Workers AI Read + Edit token"
+                disabled={sampleMode || artworkBusy}
+                autoComplete="new-password"
+                spellCheck={false}
+              />
+            </label>
+          </div>
+          <p className="byok-privacy">
+            Credentials remain in this browser tab. Masked source and
+            credentials reach Cloudflare only for requested AI generation; Comic
+            Code never stores them.{' '}
+            <a
+              href="https://developers.cloudflare.com/workers-ai/get-started/rest-api/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Create credentials
+            </a>
+          </p>
+          <div className="byok-actions">
+            {!sampleMode &&
+            ['completed', 'failed'].includes(explanation?.status ?? '') &&
+            explanation?.analysis ? (
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => void generateWithCloudflare(explanation)}
+                disabled={!cloudflareReady || artworkBusy || busy}
+              >
+                {artworkBusy
+                  ? 'Analyzing code and generating 4 panels…'
+                  : 'Analyze code + generate 4 AI panels'}
+              </button>
+            ) : (
+              <span className="success-text">
+                {sampleMode
+                  ? 'Sample mode never uses or saves credentials.'
+                  : cloudflareReady
+                    ? repository
+                      ? 'Key entered. Generate full AI comic below.'
+                      : 'Key entered. Inspect a repository to continue.'
+                    : 'No key: free bundled artwork remains available.'}
+              </span>
+            )}
+            <button
+              className="text-button"
+              type="button"
+              onClick={clearCloudflareCredentials}
+              disabled={artworkBusy}
+            >
+              Clear credentials
+            </button>
+          </div>
+          {artworkNotice ? (
+            <p className="success-text" role="status">
+              {artworkNotice}
+            </p>
+          ) : null}
+        </details>
         {localMode && recent.length ? (
           <div className="url-control">
             <label htmlFor="recent-comic">Saved comics</label>
@@ -588,104 +703,6 @@ export function ComicCodeApp() {
               </button>
             </footer>
           </div>
-        ) : null}
-
-        {repository && !sampleMode ? (
-          <details
-            className="byok-card"
-            aria-labelledby="cloudflare-setup-title"
-          >
-            <summary>
-              <span>
-                <strong>Make it your own with AI</strong>
-                <small>Optional · uses your Cloudflare account</small>
-              </span>
-              <span aria-hidden="true">+</span>
-            </summary>
-            <div>
-              <h3 id="cloudflare-setup-title">Connect Cloudflare</h3>
-              <p>
-                Leave fields empty for fixed bundled comic images. Add your
-                Cloudflare Workers AI credentials for semantic code analysis and
-                four unique FLUX images charged only to your account.
-              </p>
-            </div>
-            <div className="byok-fields">
-              <label htmlFor="cloudflare-account-id-setup">
-                Cloudflare Account ID
-                <input
-                  id="cloudflare-account-id-setup"
-                  value={cloudflareAccountId}
-                  onChange={(event) =>
-                    setCloudflareAccountId(event.target.value)
-                  }
-                  placeholder="32-character Account ID"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </label>
-              <label htmlFor="cloudflare-api-token-setup">
-                Workers AI API token (not Global API key)
-                <input
-                  id="cloudflare-api-token-setup"
-                  type="password"
-                  value={cloudflareApiToken}
-                  onChange={(event) =>
-                    setCloudflareApiToken(event.target.value)
-                  }
-                  placeholder="Workers AI Read + Edit token"
-                  autoComplete="new-password"
-                  spellCheck={false}
-                />
-              </label>
-            </div>
-            <p className="byok-privacy">
-              Credentials remain in this browser tab. Masked source and
-              credentials reach Cloudflare only for requested AI generation;
-              Comic Code never stores them.{' '}
-              <a
-                href="https://developers.cloudflare.com/workers-ai/get-started/rest-api/"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Create credentials
-              </a>
-            </p>
-            <div className="byok-actions">
-              {['completed', 'failed'].includes(explanation?.status ?? '') &&
-              explanation?.analysis ? (
-                <button
-                  className="primary-button"
-                  type="button"
-                  onClick={() => void generateWithCloudflare(explanation)}
-                  disabled={!cloudflareReady || artworkBusy || busy}
-                >
-                  {artworkBusy
-                    ? 'Analyzing code and generating 4 panels…'
-                    : 'Analyze code + generate 4 AI panels'}
-                </button>
-              ) : (
-                <span className="success-text">
-                  {cloudflareReady
-                    ? 'Key ready. Generate full AI comic above.'
-                    : 'No key: fixed fallback remains available.'}
-                </span>
-              )}
-              <button
-                className="text-button"
-                type="button"
-                onClick={clearCloudflareCredentials}
-                disabled={artworkBusy}
-              >
-                Clear credentials
-              </button>
-            </div>
-            {artworkNotice ? (
-              <p className="success-text" role="status">
-                {artworkNotice}
-              </p>
-            ) : null}
-          </details>
         ) : null}
 
         {explanation ? (

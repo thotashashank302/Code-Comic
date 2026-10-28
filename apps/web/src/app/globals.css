@@ -902,6 +902,7 @@ code {
   font-size: 11px;
 }
 .byok-card {
+  scroll-margin-top: 24px;
   margin-block: 24px;
   padding: 18px;
   border-radius: 14px;
@@ -1333,7 +1334,10 @@ code {
     width: calc(100% - 28px);
   }
   .topbar {
-    height: 76px;
+    min-height: 76px;
+    height: auto;
+    flex-wrap: wrap;
+    padding-block: 16px;
     gap: 14px;
   }
   .brand {

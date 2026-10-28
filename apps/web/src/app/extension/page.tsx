@@ -36,6 +36,11 @@ export default function ExtensionPreviewPage() {
             <li>Try the Explain, Story and Evidence tabs.</li>
             <li>Use “View sample story” to see the comic.</li>
             <li>Download the bundled sample PNG.</li>
+            <li>
+              Expand “API key / BYOK” to see the Cloudflare fields. Inputs are
+              disabled in this sample; use the installed extension for real AI
+              generation.
+            </li>
           </ul>
         </div>
         <div className="extension-preview-device">

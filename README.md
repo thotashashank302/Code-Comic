@@ -97,6 +97,25 @@ them.
 For a hosted extension, set `WXT_PUBLIC_API_BASE_URL` to the final HTTPS origin
 before building. The manifest grants access to that exact API origin.
 
+## Where to enter your API key (BYOK)
+
+- **Web:** select **API key / BYOK** in the top navigation. The settings are
+  available before inspecting a repository.
+- **Extension:** expand **API key / BYOK** just below the header, from any tab.
+- Enter your **Cloudflare Account ID** and a **Workers AI API token** with
+  Workers AI Read and Edit permissions. Use the
+  [Cloudflare credential guide](https://developers.cloudflare.com/workers-ai/get-started/rest-api/).
+  A Global API key or a key from another provider will not work here.
+- Web credentials stay in the current tab; extension credentials are saved
+  locally when you generate. Use **Clear credentials** or **Remove saved
+  credentials** to remove them. There is no provider call just for entering a key.
+- Sample mode shows the field placement with inputs disabled. It never uses or
+  saves keys. Inspect a real repository, then request AI generation to use BYOK.
+
+Free bundled artwork continues to work without a key. A Cloudflare token does
+not raise GitHub's request limit; the optional server-side `GITHUB_TOKEN` is
+configured separately in `.env`.
+
 ## Project structure
 
 ```text

@@ -16,6 +16,12 @@ const read = async (path) => {
 const landing = await (await read('/')).text()
 assert(landing.includes('Explore a sample'))
 checks.push('web sample entry point loads')
+assert(landing.includes('href="#api-key"'))
+assert(landing.includes('id="cloudflare-account-id-setup"'))
+assert(landing.includes('id="cloudflare-api-token-setup"'))
+checks.push(
+  'BYOK navigation and both credential fields exist before a repository scan',
+)
 const preview = await (await read('/extension')).text()
 assert(preview.includes('/extension-preview/sidepanel.html?preview=1'))
 checks.push('extension preview embeds the actual bundle in sample mode')

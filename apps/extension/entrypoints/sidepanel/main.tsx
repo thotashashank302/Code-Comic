@@ -608,10 +608,11 @@ function SidePanelShell() {
   const clearCloudflareCredentials = async () => {
     pendingCloudflare.current = false
     setAiGenerationRequested(false)
-    await chrome.storage.local.remove([
-      'comicCodeCloudflareAccountId',
-      'comicCodeCloudflareApiToken',
-    ])
+    if (!sampleMode)
+      await chrome.storage.local.remove([
+        'comicCodeCloudflareAccountId',
+        'comicCodeCloudflareApiToken',
+      ])
     setCloudflareAccountId('')
     setCloudflareApiToken('')
     setNotice('Cloudflare credentials removed from this device')
@@ -706,6 +707,89 @@ function SidePanelShell() {
           </>
         )}
       </div>
+      <details className="side-byok" aria-labelledby="side-cloudflare-title">
+        <summary>
+          <strong>API key / BYOK</strong>
+          <span aria-hidden="true">+</span>
+        </summary>
+        <h2 id="side-cloudflare-title">Connect Cloudflare Workers AI</h2>
+        <p>
+          No key gives a fixed, API-free comic. Add your Cloudflare Workers AI
+          key for semantic code analysis and four unique FLUX images charged
+          only to your account.
+        </p>
+        {sampleMode ? (
+          <p role="status">
+            Preview only. These fields are disabled in sample mode. Open the
+            installed extension on a GitHub repository to use your key.
+          </p>
+        ) : null}
+        <label>
+          Cloudflare Account ID
+          <input
+            value={cloudflareAccountId}
+            onChange={(event) => setCloudflareAccountId(event.target.value)}
+            placeholder="32-character Account ID"
+            disabled={sampleMode || artworkBusy}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </label>
+        <label>
+          Workers AI API token (not Global API key)
+          <input
+            type="password"
+            value={cloudflareApiToken}
+            onChange={(event) => setCloudflareApiToken(event.target.value)}
+            placeholder="Workers AI Read + Edit token"
+            disabled={sampleMode || artworkBusy}
+            autoComplete="new-password"
+            spellCheck={false}
+          />
+        </label>
+        <small>
+          Saved in extension local storage when you generate. Credentials and
+          masked source go to Cloudflare only when you request AI generation;
+          Comic Code never stores them on its server.
+        </small>
+        <a
+          href="https://developers.cloudflare.com/workers-ai/get-started/rest-api/"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Create Cloudflare credentials
+        </a>
+        {!sampleMode &&
+        ['completed', 'failed'].includes(explanation?.status ?? '') &&
+        explanation?.analysis ? (
+          <button
+            className="primary-action"
+            type="button"
+            onClick={() => void generateWithCloudflare(explanation)}
+            disabled={!cloudflareReady || artworkBusy || busy}
+          >
+            {artworkBusy
+              ? 'Analyzing code + generating 4 panels…'
+              : 'Analyze code + generate 4 AI panels'}
+          </button>
+        ) : (
+          <p className="side-byok__status">
+            {sampleMode
+              ? 'Sample mode never uses or saves credentials.'
+              : cloudflareReady
+                ? 'Key entered. Generate a comic to use and save it.'
+                : 'No key: free bundled artwork remains available.'}
+          </p>
+        )}
+        <button
+          className="side-byok__clear"
+          type="button"
+          onClick={clearCloudflareCredentials}
+          disabled={sampleMode || artworkBusy || busy}
+        >
+          Remove saved credentials
+        </button>
+      </details>
       {coordinate ? (
         <section className="pr-heading">
           <span className="repo-label">
@@ -803,88 +887,7 @@ function SidePanelShell() {
                   </div>
                 ))}
               </div>
-              {!sampleMode ? (
-                <details
-                  className="side-byok"
-                  aria-labelledby="side-cloudflare-title"
-                >
-                  <summary>
-                    <strong>Optional AI artwork</strong>
-                    <span aria-hidden="true">+</span>
-                  </summary>
-                  <h2 id="side-cloudflare-title">Your image-generation key</h2>
-                  <p>
-                    No key gives a fixed, API-free comic. Add your Cloudflare
-                    Workers AI key for semantic code analysis and four unique
-                    FLUX images charged only to your account.
-                  </p>
-                  <label>
-                    Cloudflare Account ID
-                    <input
-                      value={cloudflareAccountId}
-                      onChange={(event) =>
-                        setCloudflareAccountId(event.target.value)
-                      }
-                      placeholder="32-character Account ID"
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                  </label>
-                  <label>
-                    Workers AI API token (not Global API key)
-                    <input
-                      type="password"
-                      value={cloudflareApiToken}
-                      onChange={(event) =>
-                        setCloudflareApiToken(event.target.value)
-                      }
-                      placeholder="Workers AI Read + Edit token"
-                      autoComplete="new-password"
-                      spellCheck={false}
-                    />
-                  </label>
-                  <small>
-                    Saved only in extension local storage. Credentials and
-                    masked source go to Cloudflare only when you request AI
-                    generation; Comic Code never stores them on its server.
-                  </small>
-                  <a
-                    href="https://developers.cloudflare.com/workers-ai/get-started/rest-api/"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Create Cloudflare credentials
-                  </a>
-                  {['completed', 'failed'].includes(
-                    explanation?.status ?? '',
-                  ) && explanation?.analysis ? (
-                    <button
-                      className="primary-action"
-                      type="button"
-                      onClick={() => void generateWithCloudflare(explanation)}
-                      disabled={!cloudflareReady || artworkBusy}
-                    >
-                      {artworkBusy
-                        ? 'Analyzing code + generating 4 panels…'
-                        : 'Analyze code + generate 4 AI panels'}
-                    </button>
-                  ) : (
-                    <p className="side-byok__status">
-                      {cloudflareReady
-                        ? 'Key ready. Full AI comic will run after source scan.'
-                        : 'No key: fixed fallback remains available.'}
-                    </p>
-                  )}
-                  <button
-                    className="side-byok__clear"
-                    type="button"
-                    onClick={clearCloudflareCredentials}
-                    disabled={artworkBusy}
-                  >
-                    Remove saved credentials
-                  </button>
-                </details>
-              ) : null}
+
               <button
                 className="primary-action primary-action--amber"
                 type="button"
