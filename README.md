@@ -15,12 +15,12 @@ pnpm dev
 
 Open **http://127.0.0.1:3000**, paste a GitHub repository URL, inspect it, and
 choose **Generate fixed comic**. Download the PNG or reopen it from **Saved
-comics** after a restart. Leave the Cloudflare fields empty for the free flow.
+comics** after a restart. Leave the API key empty for the free flow.
 
 ## Preview without using API quota
 
 Choose **Explore a sample** or **Try the sample** to inspect the bundled example
-story and evidence without contacting GitHub or Cloudflare. The sample is labeled
+story and evidence without contacting GitHub or image providers. The sample is labeled
 illustrative; it does not pretend to be a fresh scan. You can download its PNG.
 
 Open **http://127.0.0.1:3000/extension** for the actual built side-panel interface
@@ -44,11 +44,11 @@ or prove that the repository is correct. A scan selects up to 40 files and
   [60 requests per hour per IP](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api).
   A large scan can use most of that allowance. An optional server-side
   `GITHUB_TOKEN` raises the limit; no token is needed to start.
-- Optional Cloudflare semantic analysis and four generated images use **your**
-  account and may require a paid plan or consume paid quota. They are never
-  called unless you supply credentials and request AI generation. Check
-  [Cloudflare pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/).
-  A failed AI request preserves the completed free comic.
+- Optional OpenAI or Google Gemini image generation uses **your own API key**.
+  Four panel images use your selected provider's quota and billing. Free API
+  access is not guaranteed. Captions and evidence come from the saved storyboard
+  and are not rewritten by the image provider. A failed request preserves the
+  existing comic. See [image BYOK setup](docs/IMAGE_BYOK.md).
 - Public hosting, private repository login and online share links need the
   separate [hosted setup](docs/HOSTED_SETUP.md). Their free tiers are limited;
   unlimited hosted AI generation is not promised.
@@ -64,7 +64,7 @@ processes against the same data directory.
 
 Completed analysis, evidence locators and PNG bytes are saved atomically under
 `apps/web/.comic-code/` when launched with the commands above. Raw source and
-Cloudflare credentials are not persisted. The directory is ignored by Git;
+Image API keys are not persisted. The directory is ignored by Git;
 new directories/files use owner-only permissions where the OS supports them.
 Records expire after 30 days and are removed on the next read/list. There is a
 100-record storage cap and a 25-generation daily safety limit over retained
@@ -90,31 +90,30 @@ Load `apps/extension/.output/chrome-mv3` at `chrome://extensions` using
 **Developer mode → Load unpacked**. Open a GitHub repository and select its
 **Explain repository** button. The side panel detects the local server and
 needs no OAuth login. Local mode supports generation and PNG download; online
-sharing requires hosted mode. The extension saves Cloudflare credentials in
-Chrome local storage only when you enter them; use its removal control to clear
-them.
+sharing requires hosted mode. Image API keys stay in side-panel memory and are cleared when the panel
+closes or you select **Clear API key**. Old saved Cloudflare credentials are
+removed automatically when the updated extension initializes.
 
 For a hosted extension, set `WXT_PUBLIC_API_BASE_URL` to the final HTTPS origin
 before building. The manifest grants access to that exact API origin.
 
 ## Where to enter your API key (BYOK)
 
-- **Web:** select **API key / BYOK** in the top navigation. The settings are
-  available before inspecting a repository.
-- **Extension:** expand **API key / BYOK** just below the header, from any tab.
-- Enter your **Cloudflare Account ID** and a **Workers AI API token** with
-  Workers AI Read and Edit permissions. Use the
-  [Cloudflare credential guide](https://developers.cloudflare.com/workers-ai/get-started/rest-api/).
-  A Global API key or a key from another provider will not work here.
-- Web credentials stay in the current tab; extension credentials are saved
-  locally when you generate. Use **Clear credentials** or **Remove saved
-  credentials** to remove them. There is no provider call just for entering a key.
-- Sample mode shows the field placement with inputs disabled. It never uses or
-  saves keys. Inspect a real repository, then request AI generation to use BYOK.
+- **Web:** select **API key / BYOK** in the top navigation.
+- **Extension:** expand **API key / BYOK** below the header, from any tab.
+- Choose **OpenAI** or **Google Gemini**, choose an image model available to your
+  account, and enter that provider's API key. Keys from other providers are not
+  interchangeable. Switching providers clears the entered key.
+- Generate a comic or select **Generate 4 AI panels** on a saved comic. Four
+  provider requests create the illustrations; captions and evidence stay intact.
+- Keys remain in current tab/panel memory. **Clear API key** removes the value.
+  There is no API call just for entering a key or changing a provider.
+- Sample mode lets you inspect providers/models with key entry disabled. No
+  provider calls or credential storage occur in samples.
 
-Free bundled artwork continues to work without a key. A Cloudflare token does
-not raise GitHub's request limit; the optional server-side `GITHUB_TOKEN` is
-configured separately in `.env`.
+Free bundled artwork works without a key. Image-provider keys do not raise
+GitHub's independent request limit; configure an optional server-side
+`GITHUB_TOKEN` separately in `.env`. Read the [setup and privacy details](docs/IMAGE_BYOK.md).
 
 ## Project structure
 

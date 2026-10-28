@@ -38,7 +38,8 @@ body {
   background: #f3f5ed;
 }
 button,
-input {
+input,
+select {
   font: inherit;
 }
 button,
@@ -353,7 +354,8 @@ input::placeholder {
   color: #5d6a53;
   margin: 13px 0;
 }
-.side-byok input {
+.side-byok input,
+.side-byok select {
   width: 100%;
   min-width: 0;
   height: 39px;

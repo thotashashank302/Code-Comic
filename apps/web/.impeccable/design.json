@@ -346,7 +346,7 @@
       "name": "Credential field",
       "kind": "input",
       "description": "Labeled field inside optional artwork controls.",
-      "html": "<label class=\"ds-field\">Cloudflare Account ID<input placeholder=\"32-character Account ID\" autocomplete=\"off\"></label>",
+      "html": "<label class=\"ds-field\">Image API key<input placeholder=\"Paste your provider API key\" autocomplete=\"off\"></label>",
       "css": ".ds-field{font-family:\"Plus Jakarta Sans\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;display:grid;gap:7px;font-size:11px;color:#4b5a48}.ds-field input{font:inherit;width:100%;height:43px;padding:0 12px;border:1px solid #d7dfcf;border-radius:9px;background:var(--white,#fff);color:var(--text,#141414);font-size:12px;caret-color:var(--green,#315e35)}.ds-field input::placeholder{color:#68716c;opacity:1}.ds-field input:focus-visible{outline:2px solid var(--green,#315e35);outline-offset:4px}"
     },
     {

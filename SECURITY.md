@@ -42,8 +42,8 @@ Comic Code handles private source code and treats repository names, descriptions
 - Forced RLS and no anon/authenticated table grants.
 - Tombstone-first deletion, worker tombstone checks, artifact cleanup, Trigger.dev cancellation, and daily retention.
 - CSP, frame denial, HSTS, no-sniff, restrictive permissions policy, CSRF origin checks, webhook HMAC verification, quotas, and bounded request bodies.
-- Cloudflare BYOK credentials accepted only on authenticated, same-origin analysis/artwork requests; strict Account ID/token bounds; provider errors reduced to safe codes; credentials excluded from persistence, Trigger.dev, analytics, and audit metadata.
-- BYOK source context is secret-masked, bounded, and sent to Cloudflare only after an explicit user action; model output passes strict schema, grounding, leak, and safety validation.
+- Image BYOK requests require the existing local-origin or hosted authentication/ownership/repository-access checks. Provider/model/key combinations are validated strictly; only fixed official OpenAI and Gemini endpoints are used, with redirects disabled. Keys are excluded from persistence, Trigger.dev, analytics and audit metadata.
+- Image BYOK sends only sanitized illustration prompts from the saved storyboard, after an explicit generation action. No raw source or evidence bodies are sent. JSON responses, base64 data, raster signatures and decoded pixels are bounded; remote image URLs are never followed. Provider response/error bodies are never logged or returned to clients.
 - BYOK artwork uploaded under a new random object path and swapped only after successful composition; failed regeneration preserves prior comic.
 
 ## Data that is persisted
@@ -52,17 +52,22 @@ Repository coordinates, captured ref and commit SHA, scan summary, selected/excl
 
 Raw patches, source blobs, prompt bodies containing source, GitHub access tokens, OAuth codes, share tokens, and provider request bodies are not persisted.
 
-Cloudflare Account IDs and API tokens are not persisted by Comic Code. Web values remain in tab memory. Extension values remain in `chrome.storage.local` on the user's device until removed. API tokens and masked selected code context cross the Comic Code server transiently over HTTPS for Cloudflare Llama and FLUX calls. Tokens must be dedicated and scoped only to Workers AI.
+OpenAI and Gemini image keys remain in webpage tab or extension panel memory;
+they are not saved in Chrome storage. They cross the Comic Code server
+transiently and authenticate only with the selected provider. Hosted traffic
+uses HTTPS; local traffic stays on loopback. The extension removes obsolete
+saved Cloudflare credentials during initialization. Gemini Interactions calls
+set `store: false`; provider-specific data policies still apply.
 
 ## Residual considerations
 
-- Cloudflare receives the masked source context in BYOK mode under the user's Cloudflare account and applicable Cloudflare data-usage terms; Comic Code does not present that path as Zero Data Retention.
+- The selected image provider receives illustration prompts under the user's account and applicable provider data policies. Image generation does not verify the storyboard's claims or guarantee text-free artwork.
 - A revoked share may retain an already minted signed asset URL for at most five minutes.
 - The encrypted extension session is still a bearer capability and expires after seven hours. Chrome extension storage must be treated as sensitive.
 - Public-repository fallback uses unauthenticated GitHub API capacity and may be rate limited.
 - Chrome, not the extension, controls left/right side-panel placement.
-- A local extension credential can be read by Comic Code extension code and anyone controlling that Chrome profile. Users should create a dedicated least-privilege Workers AI token and revoke it if the device or extension becomes untrusted.
-- A complete live review must test the deployed GitHub, Supabase, Trigger.dev, Cloudflare BYOK, and Vercel configuration with real credentials.
+- Keys in tab/panel memory can be read by someone controlling that page or device. Use a dedicated provider key with suitable account limits and revoke it if compromised.
+- A complete live review must test the deployed GitHub, Supabase, Trigger.dev, OpenAI/Gemini BYOK, and Vercel configuration with real credentials.
 
 ## Dependency status
 

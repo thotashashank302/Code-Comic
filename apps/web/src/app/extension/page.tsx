@@ -28,8 +28,8 @@ export default function ExtensionPreviewPage() {
             <strong>Sample mode. Zero API calls.</strong>
             <p>
               This is the built extension with illustrative data. It doesn’t
-              contact GitHub or Cloudflare, store credentials, or require Chrome
-              permissions.
+              contact GitHub or image providers, store credentials, or require
+              Chrome permissions.
             </p>
           </div>
           <ul>
@@ -37,9 +37,9 @@ export default function ExtensionPreviewPage() {
             <li>Use “View sample story” to see the comic.</li>
             <li>Download the bundled sample PNG.</li>
             <li>
-              Expand “API key / BYOK” to see the Cloudflare fields. Inputs are
-              disabled in this sample; use the installed extension for real AI
-              generation.
+              Expand “API key / BYOK” to see the image provider, model and key
+              fields. Key entry is disabled in this sample; use the installed
+              extension for real AI generation.
             </li>
           </ul>
         </div>

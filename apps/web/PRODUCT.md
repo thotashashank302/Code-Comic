@@ -15,13 +15,13 @@ download and deletion workflows already implemented.
 ## Operating Context
 
 The user evaluates their own project in a local web preview and Chrome extension.
-GitHub and Cloudflare quotas make repeated live inspection difficult. A clearly
+GitHub and image-provider quotas make repeated live inspection difficult. A clearly
 labeled bundled sample must allow visual review without either API.
 
 ## Capabilities and Constraints
 
 Local mode supports public repositories and free structural analysis/template
-artwork. Cloudflare generation is optional and consumes the user's allocation.
+artwork. OpenAI/Gemini image generation is optional and uses the user's own key and allocation; captions and evidence remain unchanged.
 Hosted private access and sharing require configured services. Sample content
 must never imply a fresh scan, live verification or successful paid generation.
 

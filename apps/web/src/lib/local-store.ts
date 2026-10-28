@@ -1,3 +1,4 @@
+import { hasByokArtwork } from '@comic-code/contracts/image-providers'
 import { randomUUID } from 'node:crypto'
 import {
   mkdir,
@@ -112,10 +113,9 @@ export function publicLocalComic(record: LocalComic) {
     status: 'completed',
     progress: {
       percent: 100,
-      message:
-        record.analysis.artworkProvider === 'cloudflare_byok'
-          ? 'Comic ready · Cloudflare artwork'
-          : 'Comic ready · free structural scan',
+      message: hasByokArtwork(record.analysis.artworkProvider)
+        ? 'Comic ready · user-funded AI artwork'
+        : 'Comic ready · free structural scan',
       updatedAt: record.createdAt,
     },
     analysis: record.analysis,

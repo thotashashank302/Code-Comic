@@ -5,15 +5,13 @@ import {
   failExplanation,
   getOwnedExplanation,
   recordAuditEvent,
-  recordUsage,
   removeArtifacts,
   uploadComicArtifact,
 } from '@comic-code/database'
 import { regenerateArtworkRequestSchema } from '@comic-code/contracts'
-import { githubRequestStatus, prepareRepository } from '@comic-code/github'
+import { githubRequestStatus } from '@comic-code/github'
 
 import { requireRequestSession } from '@/lib/auth/session'
-import { getServerEnv } from '@/lib/env'
 import {
   assertSameOrigin,
   HttpError,
@@ -63,61 +61,21 @@ export async function POST(request: Request, context: RouteContext) {
       await github.getInstallationId(row.github_owner, row.github_repository)
     }
 
-    stage = 'code_preparation'
-    const prepared = await prepareRepository({
-      client: github,
-      coordinate: {
-        owner: row.github_owner,
-        repository: row.github_repository,
-        ref: row.repository_ref,
-      },
-      expectedCommitSha: row.commit_sha,
-      allowPublicFallback: !access.isPrivate,
-      fallbackAccessToken: session.accessToken,
-    })
-
-    // Load native image tooling only after authentication and repository access
-    // checks. This keeps credentials and provider work outside unauthenticated
-    // requests and avoids loading Sharp in routes that will be rejected early.
+    // Illustrate the existing storyboard. No raw source or additional analysis
+    // request is needed; repository access above still protects private comics.
     stage = 'runtime_dependencies'
-    const {
-      analyzeCloudflareComic,
-      cloudflareAnalysisModel,
-      cloudflareImageModel,
-      composeComic,
-      createSafetyIdentifier,
-      generateCloudflarePanelArtwork,
-    } = await import('@comic-code/comic')
-
-    stage = 'code_analysis'
-    const analyzed = await analyzeCloudflareComic(
-      {
-        repository: `${prepared.snapshot.owner}/${prepared.snapshot.repository}`,
-        description: prepared.maskedDescription,
-        ref: prepared.snapshot.resolvedRef,
-        commitSha: prepared.snapshot.commitSha,
-        evidence: prepared.evidence,
-        excludedFiles: prepared.excludedFiles,
-        safetyIdentifier: createSafetyIdentifier(
-          session.userId,
-          getServerEnv().SAFETY_IDENTIFIER_SECRET,
-        ),
-      },
-      {
-        accountId: parsed.data.accountId,
-        apiToken: parsed.data.apiToken,
-      },
+    const { composeComic, generateByokPanelArtwork } = await import(
+      '@comic-code/comic'
     )
     const analysis = {
-      ...analyzed.analysis,
-      artworkProvider: 'cloudflare_byok',
-    } as const
+      ...row.analysis,
+      artworkProvider: `${parsed.data.provider}_byok` as
+        | 'openai_byok'
+        | 'gemini_byok',
+      artworkModel: parsed.data.model,
+    }
     stage = 'image_generation'
-    const artwork = await generateCloudflarePanelArtwork({
-      accountId: parsed.data.accountId,
-      apiToken: parsed.data.apiToken,
-      analysis,
-    })
+    const artwork = await generateByokPanelArtwork(parsed.data, analysis)
     stage = 'composition'
     const comic = await composeComic(analysis, artwork)
     const artifactPath = await uploadComicArtifact(
@@ -132,10 +90,10 @@ export async function POST(request: Request, context: RouteContext) {
         explanationId: id,
         analysis,
         excludedFiles: analysis.excludedFiles,
-        selectedFiles: prepared.selectedFiles,
+        selectedFiles: row.selected_files,
         artifactPath,
         progressMessage:
-          'Comic ready · code analyzed and illustrated with your Cloudflare credits',
+          'Comic ready · illustrated with your own image API key',
       })
     } catch (error) {
       await removeArtifacts(database, [artifactPath]).catch(() => undefined)
@@ -147,27 +105,13 @@ export async function POST(request: Request, context: RouteContext) {
         () => undefined,
       )
     }
-    await recordUsage(database, {
-      explanationId: id,
-      userId: session.userId,
-      model: `${cloudflareAnalysisModel}:byok`,
-      imageModel: `${cloudflareImageModel}:byok`,
-      inputTokens:
-        analyzed.usage.analysis.inputTokens +
-        analyzed.usage.verification.inputTokens,
-      outputTokens:
-        analyzed.usage.analysis.outputTokens +
-        analyzed.usage.verification.outputTokens,
-      imageCount: 4,
-      retryCount: 0,
-    }).catch(() => undefined)
     await recordAuditEvent(database, {
       explanationId: id,
       actorUserId: session.userId,
       eventType: 'byok_artwork_generated',
       metadata: {
-        provider: 'cloudflare',
-        codeAnalyzed: true,
+        provider: parsed.data.provider,
+        model: parsed.data.model,
         imageCount: 4,
       },
     }).catch(() => undefined)
@@ -186,7 +130,8 @@ export async function POST(request: Request, context: RouteContext) {
       providerCode === 'image_provider_auth_failed' ||
       providerCode === 'image_provider_quota_reached' ||
       providerCode === 'image_provider_unavailable' ||
-      providerCode === 'cloudflare_analysis_failed'
+      providerCode === 'image_provider_model_unavailable' ||
+      providerCode === 'image_provider_rejected'
     ) {
       const status =
         providerCode === 'image_provider_auth_failed'
@@ -194,30 +139,14 @@ export async function POST(request: Request, context: RouteContext) {
           : providerCode === 'image_provider_quota_reached'
             ? 429
             : 502
-      const details =
-        error && typeof error === 'object' && 'details' in error
-          ? (error.details as {
-              model?: string
-              status?: number
-              statusText?: string
-              responseBody?: string
-            })
-          : undefined
-      const providerStatus = details?.status
-        ? `${details.status}${details.statusText ? ` ${details.statusText}` : ''}`
-        : 'request failed'
-      const detail =
-        `Cloudflare Workers AI ${providerStatus}${details?.model ? ` for ${details.model}` : ''}: ${details?.responseBody?.trim() || providerCode}`.slice(
-          0,
-          4_000,
-        )
+      const detail = providerCode
       if (explanationId && !preserveExistingComic) {
         await failExplanation(databaseClient(), {
           explanationId,
           errorCode: providerCode,
           errorDetail: detail,
         }).catch((failure) => {
-          console.error('Could not persist Cloudflare failure', {
+          console.error('Could not persist image failure', {
             explanationId,
             errorMessage:
               failure instanceof Error
@@ -226,11 +155,9 @@ export async function POST(request: Request, context: RouteContext) {
           })
         })
       }
-      console.error('Cloudflare BYOK request failed', {
+      console.error('Image BYOK request failed', {
         stage,
         providerCode,
-        providerStatus,
-        model: details?.model,
       })
       return routeErrorResponse(new HttpError(status, providerCode, detail))
     }
@@ -250,29 +177,22 @@ export async function POST(request: Request, context: RouteContext) {
     ) {
       return routeErrorResponse(new HttpError(400, 'no_executable_code'))
     }
-    console.error('Cloudflare BYOK request failed', {
+    console.error('Image BYOK request failed', {
       stage,
       errorName: error instanceof Error ? error.name : 'UnknownError',
-      errorMessage:
-        error instanceof Error ? error.message.slice(0, 200) : 'unknown',
     })
     if (
       explanationId &&
       !preserveExistingComic &&
-      [
-        'runtime_dependencies',
-        'code_analysis',
-        'image_generation',
-        'composition',
-      ].includes(stage)
+      ['runtime_dependencies', 'image_generation', 'composition'].includes(
+        stage,
+      )
     ) {
       const prefix =
         stage === 'runtime_dependencies'
           ? 'Comic Code image runtime error:'
           : `Comic Code artwork error during ${stage}:`
-      const detail = `${prefix} ${
-        error instanceof Error ? error.message : 'Unknown runtime failure'
-      }`.slice(0, 4_000)
+      const detail = `${prefix} Please retry; your existing comic is preserved.`
       await failExplanation(databaseClient(), {
         explanationId,
         errorCode:

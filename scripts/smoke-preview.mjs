@@ -17,10 +17,12 @@ const landing = await (await read('/')).text()
 assert(landing.includes('Explore a sample'))
 checks.push('web sample entry point loads')
 assert(landing.includes('href="#api-key"'))
-assert(landing.includes('id="cloudflare-account-id-setup"'))
-assert(landing.includes('id="cloudflare-api-token-setup"'))
+assert(landing.includes('id="image-provider"'))
+assert(landing.includes('id="image-model"'))
+assert(landing.includes('value="gemini"'))
+assert(landing.includes('id="image-api-key"'))
 checks.push(
-  'BYOK navigation and both credential fields exist before a repository scan',
+  'BYOK provider, model and key controls exist before a repository scan',
 )
 const preview = await (await read('/extension')).text()
 assert(preview.includes('/extension-preview/sidepanel.html?preview=1'))

@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./repository-url": "./src/repository-url.ts"
+    "./repository-url": "./src/repository-url.ts",
+    "./image-providers": "./src/image-providers.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

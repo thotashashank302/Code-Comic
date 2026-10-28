@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import {
+  hasByokArtwork,
+  imageProviders,
+  type ImageProvider,
+} from '@comic-code/contracts/image-providers'
 
 import type { ComicAnalysis } from '@comic-code/contracts'
 import { sampleRepository, sampleExplanation } from '@comic-code/comic/sample'
@@ -42,8 +47,6 @@ type StoredState = {
   comicCodeCoordinate?: Coordinate
   comicCodeSession?: string
   comicCodeCompact?: boolean
-  comicCodeCloudflareAccountId?: string
-  comicCodeCloudflareApiToken?: string
   comicCodeExplanationIds?: Record<string, string>
 }
 type Tab = 'explain' | 'story' | 'evidence'
@@ -101,7 +104,6 @@ function parseRepositoryUrl(value: string | undefined): Coordinate | null {
 
 function friendlyError(value: string) {
   if (
-    value.startsWith('Cloudflare Workers AI ') ||
     value.startsWith('Comic Code image runtime error:') ||
     value.startsWith('Comic Code artwork error during ')
   ) {
@@ -140,17 +142,17 @@ function friendlyError(value: string) {
     github_app_installation_required:
       'Install Comic Code on this private repository, then try again.',
     invalid_image_provider_credentials:
-      'Enter a valid Cloudflare Account ID and Workers AI token.',
+      'Choose an image provider, model and valid API key.',
     image_provider_auth_failed:
-      'Cloudflare rejected these credentials. Check token permissions.',
+      'The image provider rejected this key. Check the provider and key permissions.',
     image_provider_quota_reached:
-      'Your Cloudflare Workers AI limit is exhausted.',
+      'Your image provider quota or rate limit was reached. Check billing and credits.',
     image_provider_unavailable:
-      'Cloudflare image generation is unavailable. Existing comic is safe.',
-    cloudflare_analysis_failed:
-      'Cloudflare could not create a grounded code explanation. Check Workers AI and retry.',
-    explanation_not_ready:
-      'Wait for the template comic to finish before generating AI artwork.',
+      'The image provider is unavailable. Your existing comic is safe.',
+    image_provider_model_unavailable:
+      'This image model is unavailable to your key. Choose another model or check account access.',
+    image_provider_rejected:
+      'The image request was rejected. Check your key and model access, or try a different image model.',
   }
   return (
     messages[value] ?? 'Comic Code could not complete that request. Try again.'
@@ -234,14 +236,18 @@ function SidePanelShell() {
   const [panelSide, setPanelSide] = useState<'left' | 'right' | 'unknown'>(
     'unknown',
   )
-  const [cloudflareAccountId, setCloudflareAccountId] = useState('')
-  const [cloudflareApiToken, setCloudflareApiToken] = useState('')
+  const [imageProvider, setImageProvider] = useState<ImageProvider>('openai')
+  const [imageModel, setImageModel] = useState<string>(
+    imageProviders.openai.models[0],
+  )
+  const [imageApiKey, setImageApiKey] = useState('')
   const [artworkBusy, setArtworkBusy] = useState(false)
   const [aiGenerationRequested, setAiGenerationRequested] = useState(false)
-  const pendingCloudflare = useRef(false)
-  const cloudflareReady =
-    cloudflareAccountId.trim().length === 32 &&
-    cloudflareApiToken.trim().length >= 20
+  const pendingImage = useRef(false)
+  const imageReady =
+    imageApiKey.trim().length >= 20 &&
+    imageApiKey.trim().length <= 2_048 &&
+    !/\s/.test(imageApiKey.trim())
 
   useEffect(() => {
     if (sampleMode) return
@@ -251,8 +257,6 @@ function SidePanelShell() {
         'comicCodeCoordinate',
         'comicCodeSession',
         'comicCodeCompact',
-        'comicCodeCloudflareAccountId',
-        'comicCodeCloudflareApiToken',
       ])) as StoredState
       const [tab] = await chrome.tabs.query({
         active: true,
@@ -270,8 +274,11 @@ function SidePanelShell() {
       setLocalMode(local)
       setSession(local ? 'local-desktop' : (stored.comicCodeSession ?? null))
       setCompact(stored.comicCodeCompact ?? false)
-      setCloudflareAccountId(stored.comicCodeCloudflareAccountId ?? '')
-      setCloudflareApiToken(stored.comicCodeCloudflareApiToken ?? '')
+      // Remove obsolete provider credentials instead of reusing them as new keys.
+      await chrome.storage.local.remove([
+        'comicCodeCloudflareAccountId',
+        'comicCodeCloudflareApiToken',
+      ])
 
       const sidePanel = chrome.sidePanel as typeof chrome.sidePanel & {
         getLayout?: () => Promise<{ side: 'left' | 'right' }>
@@ -391,8 +398,8 @@ function SidePanelShell() {
           void persistExplanationId(coordinate, result.explanation.id)
           if (
             result.explanation.analysis &&
-            (!pendingCloudflare.current ||
-              result.explanation.analysis.artworkProvider === 'cloudflare_byok')
+            (!pendingImage.current ||
+              hasByokArtwork(result.explanation.analysis.artworkProvider))
           ) {
             setActiveTab('story')
           }
@@ -472,15 +479,9 @@ function SidePanelShell() {
     setBusy(true)
     setError(null)
     setNotice(null)
-    pendingCloudflare.current = cloudflareReady
-    setAiGenerationRequested(cloudflareReady)
+    pendingImage.current = imageReady
+    setAiGenerationRequested(imageReady)
     try {
-      if (cloudflareReady) {
-        await chrome.storage.local.set({
-          comicCodeCloudflareAccountId: cloudflareAccountId.trim(),
-          comicCodeCloudflareApiToken: cloudflareApiToken.trim(),
-        })
-      }
       const result = await requestApi<{ explanation: Explanation }>(
         '/api/v1/explanations',
         session,
@@ -499,7 +500,7 @@ function SidePanelShell() {
       if (coordinate)
         void persistExplanationId(coordinate, result.explanation.id)
     } catch (caught) {
-      pendingCloudflare.current = false
+      pendingImage.current = false
       setAiGenerationRequested(false)
       setError(
         friendlyError(
@@ -530,17 +531,13 @@ function SidePanelShell() {
     }
   }
 
-  const generateWithCloudflare = useCallback(
+  const generateWithImageProvider = useCallback(
     async (target: Explanation) => {
       if (sampleMode || !session || !target.analysis) return
       setAiGenerationRequested(true)
       setArtworkBusy(true)
       setError(null)
       setNotice(null)
-      await chrome.storage.local.set({
-        comicCodeCloudflareAccountId: cloudflareAccountId.trim(),
-        comicCodeCloudflareApiToken: cloudflareApiToken.trim(),
-      })
       try {
         const result = await requestApi<{ explanation: Explanation }>(
           `/api/v1/explanations/${target.id}/artwork`,
@@ -548,9 +545,9 @@ function SidePanelShell() {
           {
             method: 'POST',
             body: JSON.stringify({
-              provider: 'cloudflare',
-              accountId: cloudflareAccountId.trim(),
-              apiToken: cloudflareApiToken.trim(),
+              provider: imageProvider,
+              model: imageModel,
+              apiKey: imageApiKey.trim(),
             }),
           },
         )
@@ -560,9 +557,7 @@ function SidePanelShell() {
         }
         setAiGenerationRequested(false)
         setActiveTab('story')
-        setNotice(
-          'Code analyzed and four panels generated with your Cloudflare credits',
-        )
+        setNotice('Four AI panels ready. Captions and evidence are unchanged.')
       } catch (caught) {
         const failed = await requestApi<{ explanation: Explanation }>(
           `/api/v1/explanations/${target.id}`,
@@ -589,33 +584,27 @@ function SidePanelShell() {
         setArtworkBusy(false)
       }
     },
-    [cloudflareAccountId, cloudflareApiToken, coordinate, session, sampleMode],
+    [imageProvider, imageModel, imageApiKey, coordinate, session, sampleMode],
   )
 
   useEffect(() => {
     if (
-      !pendingCloudflare.current ||
+      !pendingImage.current ||
       artworkBusy ||
       explanation?.status !== 'completed' ||
       !explanation.analysis
     ) {
       return
     }
-    pendingCloudflare.current = false
-    void generateWithCloudflare(explanation)
-  }, [artworkBusy, explanation, generateWithCloudflare])
+    pendingImage.current = false
+    void generateWithImageProvider(explanation)
+  }, [artworkBusy, explanation, generateWithImageProvider])
 
-  const clearCloudflareCredentials = async () => {
-    pendingCloudflare.current = false
+  const clearImageCredentials = async () => {
+    pendingImage.current = false
     setAiGenerationRequested(false)
-    if (!sampleMode)
-      await chrome.storage.local.remove([
-        'comicCodeCloudflareAccountId',
-        'comicCodeCloudflareApiToken',
-      ])
-    setCloudflareAccountId('')
-    setCloudflareApiToken('')
-    setNotice('Cloudflare credentials removed from this device')
+    setImageApiKey('')
+    setNotice('API key cleared from this panel')
   }
 
   const toggleCompact = async () => {
@@ -626,6 +615,8 @@ function SidePanelShell() {
 
   const logout = async () => {
     await chrome.storage.local.remove('comicCodeSession')
+    pendingImage.current = false
+    setImageApiKey('')
     setSession(null)
     setRepository(null)
     setExplanation(null)
@@ -633,7 +624,7 @@ function SidePanelShell() {
   }
 
   const loadSample = () => {
-    pendingCloudflare.current = false
+    pendingImage.current = false
     setSampleMode(true)
     setLocalMode(true)
     setCoordinate(sampleRepository)
@@ -707,57 +698,88 @@ function SidePanelShell() {
           </>
         )}
       </div>
-      <details className="side-byok" aria-labelledby="side-cloudflare-title">
+      <details className="side-byok" aria-labelledby="side-image-title">
         <summary>
           <strong>API key / BYOK</strong>
           <span aria-hidden="true">+</span>
         </summary>
-        <h2 id="side-cloudflare-title">Connect Cloudflare Workers AI</h2>
+        <h2 id="side-image-title">Bring your own image AI</h2>
         <p>
-          No key gives a fixed, API-free comic. Add your Cloudflare Workers AI
-          key for semantic code analysis and four unique FLUX images charged
-          only to your account.
+          Use OpenAI or Google Gemini to generate four illustrations with your
+          own key. Captions and evidence stay unchanged. No key uses free
+          bundled artwork.
         </p>
         {sampleMode ? (
           <p role="status">
-            Preview only. These fields are disabled in sample mode. Open the
-            installed extension on a GitHub repository to use your key.
+            Preview only. Choose a provider to see its models. Key entry is
+            disabled in sample mode.
           </p>
         ) : null}
         <label>
-          Cloudflare Account ID
-          <input
-            value={cloudflareAccountId}
-            onChange={(event) => setCloudflareAccountId(event.target.value)}
-            placeholder="32-character Account ID"
-            disabled={sampleMode || artworkBusy}
-            autoComplete="off"
-            spellCheck={false}
-          />
+          Image provider
+          <select
+            value={imageProvider}
+            disabled={busy || artworkBusy}
+            onChange={(event) => {
+              pendingImage.current = false
+              setAiGenerationRequested(false)
+              const provider = event.target.value as ImageProvider
+              setImageProvider(provider)
+              setImageModel(imageProviders[provider].models[0])
+              setImageApiKey('')
+            }}
+          >
+            <option value="openai">OpenAI</option>
+            <option value="gemini">Google Gemini</option>
+          </select>
         </label>
         <label>
-          Workers AI API token (not Global API key)
+          Image model
+          <select
+            value={imageModel}
+            disabled={busy || artworkBusy}
+            onChange={(event) => {
+              pendingImage.current = false
+              setAiGenerationRequested(false)
+              setImageModel(event.target.value)
+            }}
+          >
+            {imageProviders[imageProvider].models.map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          {imageProviders[imageProvider].label} API key
           <input
             type="password"
-            value={cloudflareApiToken}
-            onChange={(event) => setCloudflareApiToken(event.target.value)}
-            placeholder="Workers AI Read + Edit token"
-            disabled={sampleMode || artworkBusy}
+            value={imageApiKey}
+            onChange={(event) => {
+              pendingImage.current = false
+              setAiGenerationRequested(false)
+              setImageApiKey(event.target.value)
+            }}
+            placeholder="Paste your provider API key"
+            maxLength={2048}
+            disabled={sampleMode || busy || artworkBusy}
             autoComplete="new-password"
             spellCheck={false}
           />
         </label>
         <small>
-          Saved in extension local storage when you generate. Credentials and
-          masked source go to Cloudflare only when you request AI generation;
-          Comic Code never stores them on its server.
+          The key stays in this panel until it closes or you clear it. It passes
+          through Comic Code for generation and is never saved. Only
+          illustration prompts go to the selected provider. Four images use your
+          provider’s quota and billing.
         </small>
         <a
-          href="https://developers.cloudflare.com/workers-ai/get-started/rest-api/"
+          href={imageProviders[imageProvider].keyUrl}
           target="_blank"
           rel="noreferrer"
         >
-          Create Cloudflare credentials
+          Get a key from {imageProviders[imageProvider].label}
         </a>
         {!sampleMode &&
         ['completed', 'failed'].includes(explanation?.status ?? '') &&
@@ -765,29 +787,27 @@ function SidePanelShell() {
           <button
             className="primary-action"
             type="button"
-            onClick={() => void generateWithCloudflare(explanation)}
-            disabled={!cloudflareReady || artworkBusy || busy}
+            onClick={() => void generateWithImageProvider(explanation)}
+            disabled={!imageReady || artworkBusy || busy}
           >
-            {artworkBusy
-              ? 'Analyzing code + generating 4 panels…'
-              : 'Analyze code + generate 4 AI panels'}
+            {artworkBusy ? 'Generating 4 AI panels…' : 'Generate 4 AI panels'}
           </button>
         ) : (
-          <p className="side-byok__status">
+          <p className="side-byok__status" role="status">
             {sampleMode
-              ? 'Sample mode never uses or saves credentials.'
-              : cloudflareReady
-                ? 'Key entered. Generate a comic to use and save it.'
+              ? 'Sample mode never uses or saves keys.'
+              : imageReady
+                ? 'Key entered. Generate a comic to use your image AI.'
                 : 'No key: free bundled artwork remains available.'}
           </p>
         )}
         <button
           className="side-byok__clear"
           type="button"
-          onClick={clearCloudflareCredentials}
+          onClick={clearImageCredentials}
           disabled={sampleMode || artworkBusy || busy}
         >
-          Remove saved credentials
+          Clear API key
         </button>
       </details>
       {coordinate ? (
@@ -892,20 +912,20 @@ function SidePanelShell() {
                 className="primary-action primary-action--amber"
                 type="button"
                 onClick={generate}
-                disabled={busy}
+                disabled={busy || artworkBusy}
               >
                 {sampleMode
                   ? 'View sample story'
                   : busy
                     ? 'Preparing source preview…'
                     : explanation?.status === 'completed'
-                      ? cloudflareReady
-                        ? 'Regenerate full AI comic'
+                      ? imageReady
+                        ? 'Regenerate comic with AI images'
                         : 'Regenerate fixed comic'
                       : explanation?.status === 'failed'
                         ? 'Retry explanation'
-                        : cloudflareReady
-                          ? 'Generate full AI comic'
+                        : imageReady
+                          ? 'Generate comic with AI images'
                           : 'Generate fixed comic'}
               </button>
               <div className="privacy-note">
@@ -937,8 +957,8 @@ function SidePanelShell() {
                   <span className="eyebrow">{explanation.status}</span>
                   <strong>
                     {aiGenerationRequested &&
-                    explanation.analysis?.artworkProvider !== 'cloudflare_byok'
-                      ? 'Analyzing code + generating 4 AI panels…'
+                    !hasByokArtwork(explanation.analysis?.artworkProvider)
+                      ? 'Generating 4 AI panels…'
                       : explanation.progress.message}
                   </strong>
                 </div>
@@ -971,7 +991,7 @@ function SidePanelShell() {
           {explanation.analysis.generationMode === 'deterministic_fallback' ? (
             <p className="panel-notice panel-notice--fallback">
               <strong>
-                {explanation.analysis.artworkProvider === 'cloudflare_byok'
+                {hasByokArtwork(explanation.analysis.artworkProvider)
                   ? 'API-free story · user-funded AI artwork.'
                   : sampleMode
                     ? 'Illustrative sample.'
@@ -980,11 +1000,11 @@ function SidePanelShell() {
               {sampleMode
                 ? 'Bundled example panels and evidence. No repository was fetched or verified.'
                 : 'Story explains selected source code without an OpenAI API call.'}
-              {explanation.analysis.artworkProvider === 'cloudflare_byok'
-                ? ' Images use your Cloudflare credits.'
+              {hasByokArtwork(explanation.analysis.artworkProvider)
+                ? ' Images use your selected provider key.'
                 : ' Images use bundled templates.'}{' '}
               {!sampleMode
-                ? 'Add your key in Explain for semantic analysis and unique images.'
+                ? 'Add your key in API key / BYOK to generate unique images.'
                 : ''}
             </p>
           ) : null}
@@ -1076,7 +1096,7 @@ function SidePanelShell() {
           </button>
         )}
         {session && !localMode ? (
-          <button type="button" onClick={logout}>
+          <button type="button" onClick={logout} disabled={busy || artworkBusy}>
             Sign out
           </button>
         ) : null}

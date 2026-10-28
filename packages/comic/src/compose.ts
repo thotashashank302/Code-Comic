@@ -1,4 +1,5 @@
 import type { ComicAnalysis } from '@comic-code/contracts'
+import { hasByokArtwork } from '@comic-code/contracts/image-providers'
 import sharp from 'sharp'
 
 import type { GeneratedPanelArtwork } from './types'
@@ -114,12 +115,11 @@ export async function composeComic(
       })
     }),
   )
-  const footerText =
-    analysis.artworkProvider === 'cloudflare_byok'
-      ? 'Comic Code | User-funded code analysis and AI artwork.'
-      : analysis.generationMode === 'deterministic_fallback'
-        ? 'Comic Code | API-free source scan and fixed artwork.'
-        : 'Comic Code | AI-generated repository explanation - verify important details with its maintainers.'
+  const footerText = hasByokArtwork(analysis.artworkProvider)
+    ? 'Comic Code | User-funded AI artwork. Verify important details.'
+    : analysis.generationMode === 'deterministic_fallback'
+      ? 'Comic Code | API-free source scan and fixed artwork.'
+      : 'Comic Code | AI-generated repository explanation - verify important details with its maintainers.'
   const footer = Buffer.from(`
     <svg width="${comicWidth}" height="${footerHeight}" xmlns="http://www.w3.org/2000/svg">
       <rect width="100%" height="100%" fill="#dce7c7" />

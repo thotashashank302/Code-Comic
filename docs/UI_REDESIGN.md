@@ -8,10 +8,11 @@ use the same light surfaces, dark text and green actions. Plus Jakarta Sans is
 bundled locally with its SIL Open Font License; browsers need no Google request.
 
 Existing repository inspection, generation, evidence, download, deletion and
-optional Cloudflare controls remain available. **API key / BYOK** is available
+optional image-provider controls remain available. **API key / BYOK** is available
 from the web navigation before a repository scan and below the extension header
-on every tab. Its disclosure shows Cloudflare Account ID and Workers AI API
-token fields; sample mode displays them disabled. Template artwork, AI artwork palette instructions, PNG composition and toolbar icons also use the
+on every tab. Its disclosure shows an OpenAI/Gemini provider selector, image model selector
+and masked API key. Sample mode allows provider/model exploration with key entry
+disabled. See [image BYOK setup](IMAGE_BYOK.md). Template artwork, AI artwork palette instructions, PNG composition and toolbar icons also use the
 new palette; old saved comics retain their original artwork.
 
 ## Reviewing without provider quota
@@ -31,7 +32,7 @@ frameable, and only by the same origin; application pages retain their existing
 framing restrictions.
 
 The installed extension's **Explore sample** control also works with the bundled
-fixture. Live GitHub/Cloudflare operation, OAuth and actual Chrome integration
+fixture. Live GitHub/image-provider operation, OAuth and actual Chrome integration
 remain distinct from UI preview verification.
 
 ## Build and checks

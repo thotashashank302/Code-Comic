@@ -1,6 +1,7 @@
 import Image from 'next/image'
 
 import type { ComicAnalysis } from '@comic-code/contracts'
+import { hasByokArtwork } from '@comic-code/contracts/image-providers'
 
 type StoryboardProps = {
   sample?: boolean
@@ -14,7 +15,7 @@ export function Storyboard({
   sample = false,
 }: StoryboardProps) {
   const isFallback = analysis.generationMode === 'deterministic_fallback'
-  const hasUserArtwork = analysis.artworkProvider === 'cloudflare_byok'
+  const hasUserArtwork = hasByokArtwork(analysis.artworkProvider)
 
   return (
     <section className="storyboard" aria-labelledby="storyboard-title">
@@ -42,11 +43,10 @@ export function Storyboard({
               'This bundled story shows how the interface works. The example files and claims are illustrative; no repository was fetched or verified.'
             ) : (
               <>
-                This preview scans representative files at one repository commit
-                and explains their detected structure without an OpenAI API
-                call.{' '}
+                The explanation comes from a structural scan of representative
+                files at one repository commit.{' '}
                 {hasUserArtwork
-                  ? 'Panel images were generated using your Cloudflare credentials.'
+                  ? 'Panel images were generated using your own image API key.'
                   : 'Artwork uses bundled visual templates.'}{' '}
                 It explains detected code behavior and flow, but not unstated
                 business intent.

@@ -940,13 +940,17 @@ code {
   gap: 14px;
   margin-block: 18px;
 }
+.byok-fields label:last-child {
+  grid-column: 1 / -1;
+}
 .byok-fields label {
   display: grid;
   gap: 7px;
   font-size: 11px;
   color: #4b5a48;
 }
-.byok-fields input {
+.byok-fields input,
+.byok-fields select {
   width: 100%;
   border: 1px solid #d7dfcf;
   border-radius: 9px;

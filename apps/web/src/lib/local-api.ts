@@ -174,36 +174,15 @@ async function illustrate(request: Request, id: string) {
     throw new LocalError(400, 'invalid_image_provider_credentials')
   return mutate(async () => {
     const record = await requireComic(id)
-    const [owner, repository] = record.repository.split('/')
-    if (!owner || !repository) throw new LocalError(500, 'local_request_failed')
-    const prepared = await prepare({
-      owner,
-      repository,
-      ref: record.ref,
-      commitSha: record.commitSha,
-    })
-    const { analyzeCloudflareComic, generateCloudflarePanelArtwork } =
-      await import('@comic-code/comic')
-    const result = await analyzeCloudflareComic(
-      {
-        repository: record.repository,
-        description: prepared.maskedDescription,
-        ref: record.ref,
-        commitSha: record.commitSha,
-        evidence: prepared.evidence,
-        excludedFiles: prepared.excludedFiles,
-        safetyIdentifier: 'local-desktop',
-      },
-      parsed.data,
-    )
+    const { generateByokPanelArtwork } = await import('@comic-code/comic')
     const analysis = {
-      ...result.analysis,
-      artworkProvider: 'cloudflare_byok' as const,
+      ...record.analysis,
+      artworkProvider: `${parsed.data.provider}_byok` as
+        | 'openai_byok'
+        | 'gemini_byok',
+      artworkModel: parsed.data.model,
     }
-    const artwork = await generateCloudflarePanelArtwork({
-      ...parsed.data,
-      analysis,
-    })
+    const artwork = await generateByokPanelArtwork(parsed.data, analysis)
     const png = await composeComic(analysis, artwork)
     // Replace the complete record atomically; failures preserve the free comic.
     await localStore().save({
@@ -334,7 +313,8 @@ export async function handleLocalApi(request: Request) {
         'image_provider_auth_failed',
         'image_provider_quota_reached',
         'image_provider_unavailable',
-        'cloudflare_analysis_failed',
+        'image_provider_model_unavailable',
+        'image_provider_rejected',
       ].includes(code)
     ) {
       return json(

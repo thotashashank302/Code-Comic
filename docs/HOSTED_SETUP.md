@@ -22,9 +22,9 @@ supabase          CLI config and timestamped database migration
 
 Raw source, reconstructed patches, and prompts containing source exist only in authenticated function or worker memory. They are never written to PostgreSQL, Storage, Trigger.dev payloads or outputs, audit metadata, analytics, or application logs.
 
-Cloudflare BYOK Account IDs and API tokens are accepted only by the authenticated code-analysis/artwork route over HTTPS. They remain in webpage tab memory or Chrome extension local storage, are never placed in Trigger.dev payloads, and are never persisted by Comic Code servers, databases, logs, or audit records. Masked selected code context is sent transiently to Cloudflare for Llama analysis and claim verification; FLUX then generates four images. The user's Cloudflare account pays for both text and image inference.
+OpenAI/Gemini image API keys are accepted only by the authenticated artwork route over HTTPS. They remain in webpage tab or extension panel memory and are never placed in Trigger.dev payloads, server persistence, logs or audit metadata. The chosen image provider receives sanitized illustration prompts from the existing storyboard, without raw repository source. The user's provider account pays for four image requests. See [image BYOK setup](IMAGE_BYOK.md).
 
-The authenticated web request scans the inspected immutable commit while the GitHub OAuth token is available, masks source, and persists sanitized analysis and scan metadata. The worker receives only an explanation UUID and composes artwork from that analysis; recovery can rescan when analysis is missing. Raw source is never included in its payload. If a user supplies Cloudflare credentials, the authenticated web route refetches the same bounded repository evidence and sends it transiently to that user's Workers AI account.
+The authenticated web request scans the inspected immutable commit while the GitHub OAuth token is available, masks source, and persists sanitized analysis and scan metadata. The worker receives only an explanation UUID and composes artwork from that analysis; recovery can rescan when analysis is missing. Raw source is never included in its payload. Optional image BYOK keeps the saved captions/evidence and does not rescan source; hosted repository access is rechecked before generating artwork.
 
 See [SECURITY.md](../SECURITY.md) for the threat model and residual considerations.
 
@@ -33,7 +33,7 @@ See [SECURITY.md](../SECURITY.md) for the threat model and residual consideratio
 - Node.js 24+
 - pnpm 11.11.0
 - Chrome 114+
-- Optional Cloudflare account for user-funded semantic analysis and FLUX artwork
+- Optional OpenAI or Google Gemini account/key for user-funded images
 - GitHub App
 - Supabase project
 - Trigger.dev project
@@ -139,12 +139,17 @@ Chrome controls whether side panels appear on the left or right. Comic Code read
 
 ### User-funded artwork
 
-Before generating, choose the image mode. Leave both fields empty for the fixed API-free comic, or provide:
+Select **API key / BYOK**, choose OpenAI or Google Gemini and an image model,
+then enter that provider's key. Leave the key empty for bundled artwork.
+Keys remain in the current tab/panel memory; **Clear API key** removes them.
+Switching providers clears the key so it cannot accidentally reach another
+provider. Obsolete saved Cloudflare credentials are removed by the extension.
 
-- Cloudflare Account ID.
-- API token with Workers AI Read and Workers AI Edit permissions.
-
-Web credentials live only in current tab memory. Extension credentials use `chrome.storage.local` until the user selects **Remove saved credentials** or uninstalls the extension. With a valid key, generation automatically creates the fixed preview first, then refetches and masks bounded source from the selected files, asks Cloudflare Llama for a grounded story plus independent claim verification, generates four distinct FLUX panels with separate prompts and seeds, composes a new PNG, then atomically replaces the preview. Failures leave the fixed comic unchanged.
+Generation creates the free preview first, then makes four image requests using
+the selected provider. Captions, claims and evidence are unchanged. The new PNG
+replaces the existing artifact only after all panels and composition succeed.
+Failures keep the existing comic available. No automatic paid retries run.
+See [supported models, API details and acceptance checks](IMAGE_BYOK.md).
 
 ## Verification
 

@@ -159,36 +159,84 @@ describe('free local flow', () => {
     ).toBe(404)
   })
 
-  it('preserves a completed comic when source preparation for AI fails', async () => {
-    const { explanation } = await (
-      await handleLocalApi(request('/v1/explanations', 'POST', input))
-    ).json()
-    vi.mocked(prepareRepository).mockRejectedValueOnce({ status: 403 })
-    const response = await handleLocalApi(
-      request(`/v1/explanations/${explanation.id}/artwork`, 'POST', {
-        provider: 'cloudflare',
-        accountId: 'a'.repeat(32),
-        apiToken: 'b'.repeat(40),
-      }),
-    )
-    expect(response.status).toBe(429)
-    const record = await new LocalStore(directory).get(explanation.id)
-    expect(record?.analysis.artworkProvider).toBe('template')
-    expect(JSON.stringify(record)).not.toContain('b'.repeat(40))
-  })
+  it.each(['openai', 'gemini'] as const)(
+    'illustrates a saved comic with %s without another GitHub scan or changing its evidence',
+    async (provider) => {
+      const { explanation } = await (
+        await handleLocalApi(request('/v1/explanations', 'POST', input))
+      ).json()
+      const original = await new LocalStore(directory).get(explanation.id)
+      const encoded = (
+        await sharp({
+          create: { width: 64, height: 64, channels: 3, background: '#e8d8c4' },
+        })
+          .png()
+          .toBuffer()
+      ).toString('base64')
+      const secret = 'dummy-user-image-key-not-a-real-key'
+      vi.mocked(prepareRepository).mockRejectedValue({ status: 429 })
+      const upstream = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async () =>
+          Response.json(
+            provider === 'openai'
+              ? { data: [{ b64_json: encoded }] }
+              : {
+                  status: 'completed',
+                  steps: [
+                    {
+                      type: 'model_output',
+                      content: [
+                        {
+                          type: 'image',
+                          mime_type: 'image/png',
+                          data: encoded,
+                        },
+                      ],
+                    },
+                  ],
+                },
+          ),
+        )
+      const response = await handleLocalApi(
+        request(`/v1/explanations/${explanation.id}/artwork`, 'POST', {
+          provider,
+          apiKey: secret,
+        }),
+      )
+      expect(response.status).toBe(200)
+      expect(prepareRepository).toHaveBeenCalledTimes(1)
+      expect(upstream).toHaveBeenCalledTimes(4)
+      const persisted = await new LocalStore(directory).get(explanation.id)
+      expect(persisted?.commitSha).toBe(original?.commitSha)
+      expect(persisted?.analysis).toMatchObject({
+        ...original?.analysis,
+        artworkProvider: `${provider}_byok`,
+      })
+      expect(persisted?.png).not.toBe(original?.png)
+      expect(JSON.stringify(persisted)).not.toContain(secret)
+      expect(JSON.stringify(persisted)).not.toContain(transientSource)
+      const downloaded = await handleLocalApi(
+        request(`/v1/explanations/${explanation.id}/download`),
+      )
+      expect(
+        await sharp(Buffer.from(await downloaded.arrayBuffer())).metadata(),
+      ).toMatchObject({ width: 1600, height: 1200 })
+    },
+  )
 
   it.each([
     [401, 'image_provider_auth_failed'],
     [429, 'image_provider_quota_reached'],
-    [503, 'cloudflare_analysis_failed'],
+    [503, 'image_provider_unavailable'],
   ])(
-    'handles a Cloudflare %i without losing the free comic or leaking the token',
+    'handles a provider %i without losing the free comic or leaking the token',
     async (status, code) => {
       const { explanation } = await (
         await handleLocalApi(request('/v1/explanations', 'POST', input))
       ).json()
       const original = await new LocalStore(directory).get(explanation.id)
-      const secret = 'test-workers-ai-token-never-persist'
+      const secret = 'test-image-api-key-never-persist'
       const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
       const errors = vi
         .spyOn(console, 'error')
@@ -201,21 +249,18 @@ describe('free local flow', () => {
         )
       const response = await handleLocalApi(
         request(`/v1/explanations/${explanation.id}/artwork`, 'POST', {
-          provider: 'cloudflare',
-          accountId: 'a'.repeat(32),
-          apiToken: secret,
+          provider: 'openai',
+          apiKey: secret,
         }),
       )
       expect(response.status).toBe(status === 503 ? 502 : status)
       expect(await response.json()).toEqual({ error: code })
       const [url, init] = upstream.mock.calls[0]!
-      expect(String(url)).toMatch(
-        /^https:\/\/api\.cloudflare\.com\/client\/v4\/accounts\/a{32}\/ai\/run\//,
-      )
+      expect(String(url)).toBe('https://api.openai.com/v1/images/generations')
       expect(new Headers(init?.headers).get('Authorization')).toBe(
         `Bearer ${secret}`,
       )
-      expect(String(init?.body)).toContain(transientSource.split('\n')[0]!)
+      expect(String(init?.body)).not.toContain(transientSource.split('\n')[0]!)
       expect(String(init?.body)).not.toContain(secret)
       expect(await new LocalStore(directory).get(explanation.id)).toEqual(
         original,

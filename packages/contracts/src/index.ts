@@ -1,6 +1,8 @@
 import { z } from 'zod'
+import { geminiImageModels, openaiImageModels } from './image-providers'
 
 export * from './repository-url'
+export * from './image-providers'
 
 export const maxPersistedExcludedFiles = 500
 
@@ -103,19 +105,38 @@ export const comicAnalysisSchema = comicAnalysisDraftSchema.extend({
   generationMode: z
     .enum(['openai', 'cloudflare_byok', 'deterministic_fallback'])
     .optional(),
-  artworkProvider: z.enum(['openai', 'template', 'cloudflare_byok']).optional(),
+  artworkProvider: z
+    .enum([
+      'openai',
+      'template',
+      'cloudflare_byok',
+      'openai_byok',
+      'gemini_byok',
+    ])
+    .optional(),
+  artworkModel: z.string().max(100).optional(),
 })
 
 export type ComicAnalysis = z.infer<typeof comicAnalysisSchema>
 
-export const regenerateArtworkRequestSchema = z.object({
-  provider: z.literal('cloudflare'),
-  accountId: z
-    .string()
-    .trim()
-    .regex(/^[a-f0-9]{32}$/i),
-  apiToken: z.string().trim().min(20).max(2_048),
-})
+const imageApiKeySchema = z.string().trim().min(20).max(2_048).regex(/^\S+$/)
+
+export const regenerateArtworkRequestSchema = z.discriminatedUnion('provider', [
+  z
+    .object({
+      provider: z.literal('openai'),
+      apiKey: imageApiKeySchema,
+      model: z.enum(openaiImageModels).default(openaiImageModels[0]),
+    })
+    .strict(),
+  z
+    .object({
+      provider: z.literal('gemini'),
+      apiKey: imageApiKeySchema,
+      model: z.enum(geminiImageModels).default(geminiImageModels[0]),
+    })
+    .strict(),
+])
 
 export type RegenerateArtworkRequest = z.infer<
   typeof regenerateArtworkRequestSchema
