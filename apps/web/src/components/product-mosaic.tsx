@@ -127,7 +127,7 @@ export function ProductMosaic({
           </span>
           <div>
             <strong>A little clarity, delivered.</strong>
-            <p>Your repository. Four comic panels.</p>
+            <p>Your repository. A clearer comic story.</p>
           </div>
           <span className="toast-label">SAMPLE</span>
         </div>
@@ -177,7 +177,8 @@ export function ProductMosaic({
           </h1>
           <p>
             A GitHub repository, translated into
-            <br className="desktop-break" /> four evidence-linked comic panels.
+            <br className="desktop-break" /> up to twelve evidence-linked comic
+            panels.
           </p>
           <button
             className="sample-link"
@@ -274,7 +275,7 @@ export function ProductMosaic({
           ))}
         </div>
         <span className="process-caption">
-          Four panels, from beginning to end.
+          A fuller story, from beginning to end.
         </span>
       </article>
       <article className="mosaic-card mosaic-search">

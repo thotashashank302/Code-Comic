@@ -45,7 +45,8 @@ export function explanationIdempotencyKey(
         repository: request.repository.toLowerCase(),
         ref: request.ref ?? null,
         commitSha: commitSha.toLowerCase(),
-        scannerVersion: 1,
+        scannerVersion: 2,
+        panelCount: request.panelCount ?? 4,
         forceNonce,
       }),
     )

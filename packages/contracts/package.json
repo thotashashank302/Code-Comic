@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./repository-url": "./src/repository-url.ts",
-    "./image-providers": "./src/image-providers.ts"
+    "./image-providers": "./src/image-providers.ts",
+    "./comic-layout": "./src/comic-layout.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

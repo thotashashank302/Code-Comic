@@ -3,6 +3,7 @@ import { geminiImageModels, openaiImageModels } from './image-providers'
 
 export * from './repository-url'
 export * from './image-providers'
+export * from './comic-layout'
 
 export const maxPersistedExcludedFiles = 500
 
@@ -16,6 +17,7 @@ export const createExplanationRequestSchema = repositoryCoordinateSchema.extend(
   {
     commitSha: z.string().regex(/^[a-f0-9]{40}$/i),
     forceRegenerate: z.boolean().default(false),
+    panelCount: z.union([z.literal(4), z.literal(12)]).default(4),
   },
 )
 
@@ -65,7 +67,7 @@ export const groundedClaimSchema = z.object({
 export type GroundedClaim = z.infer<typeof groundedClaimSchema>
 
 export const comicPanelSchema = z.object({
-  sequence: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+  sequence: z.number().int().min(1).max(12),
   purpose: z.enum([
     'before',
     'change',
@@ -100,6 +102,16 @@ export const comicAnalysisDraftSchema = z.object({
 export type ComicAnalysisDraft = z.infer<typeof comicAnalysisDraftSchema>
 
 export const comicAnalysisSchema = comicAnalysisDraftSchema.extend({
+  panels: z
+    .array(comicPanelSchema)
+    .min(4)
+    .max(12)
+    .refine(
+      (panels) =>
+        [4, 12].includes(panels.length) &&
+        panels.every((panel, index) => panel.sequence === index + 1),
+      'A comic must contain four or twelve panels in sequence',
+    ),
   evidence: z.array(persistedEvidenceLocatorSchema).min(1).max(200),
   excludedFiles: z.array(z.string().max(1_024)).max(maxPersistedExcludedFiles),
   generationMode: z

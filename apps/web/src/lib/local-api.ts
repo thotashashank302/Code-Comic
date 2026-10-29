@@ -116,6 +116,7 @@ async function generate(request: Request) {
           input.ref ?? '',
           input.commitSha.toLowerCase(),
           deterministicFallbackModels.analysis,
+          input.panelCount,
         ]),
       )
       .digest('hex')
@@ -141,6 +142,7 @@ async function generate(request: Request) {
         evidence: prepared.evidence,
         excludedFiles: prepared.excludedFiles,
         safetyIdentifier: 'local-desktop',
+        panelCount: input.panelCount,
       }),
       artworkProvider: 'template' as const,
     }
@@ -153,6 +155,7 @@ async function generate(request: Request) {
       ref: input.ref ?? prepared.snapshot.defaultBranch,
       commitSha: prepared.snapshot.commitSha,
       scanSummary: {
+        panelCount: input.panelCount,
         totalTreeFiles: prepared.totalTreeFiles,
         selectedFileCount: prepared.selectedFiles.length,
         excludedFileCount: prepared.excludedFileCount,

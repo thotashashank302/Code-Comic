@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import sharp from 'sharp'
 
 import { regenerateArtworkRequestSchema } from '@comic-code/contracts'
-import { sampleAnalysis } from './sample'
+import { sampleAnalysis, sampleDetailedAnalysis } from './sample'
 import { generateByokPanelArtwork } from './byok-images'
 
 const secret = 'dummy-image-api-key-no-real-access'
@@ -16,6 +16,32 @@ const image = () =>
 afterEach(() => vi.restoreAllMocks())
 
 describe('image provider BYOK', () => {
+  it('generates twelve ordered panels with at most three provider requests in flight', async () => {
+    const encoded = (await image()).toString('base64')
+    let inFlight = 0
+    let peak = 0
+    const upstream = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => {
+        inFlight++
+        peak = Math.max(peak, inFlight)
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        inFlight--
+        return Response.json({ data: [{ b64_json: encoded }] })
+      })
+    const artwork = await generateByokPanelArtwork(
+      regenerateArtworkRequestSchema.parse({
+        provider: 'openai',
+        apiKey: secret,
+      }),
+      sampleDetailedAnalysis,
+    )
+    expect(upstream).toHaveBeenCalledTimes(12)
+    expect(peak).toBeLessThanOrEqual(3)
+    expect(artwork.map((panel) => panel.sequence)).toEqual(
+      Array.from({ length: 12 }, (_, index) => index + 1),
+    )
+  })
   it.each(['openai', 'gemini'] as const)(
     'generates and normalizes four distinct %s panels with only the chosen key',
     async (provider) => {
@@ -133,7 +159,7 @@ describe('image provider BYOK', () => {
       ).catch((error: unknown) => error)
       expect(failure).toMatchObject({ code, provider: 'openai' })
       expect(JSON.stringify(failure)).not.toContain(secret)
-      expect(upstream).toHaveBeenCalledTimes(4)
+      expect(upstream).toHaveBeenCalledTimes(3)
       expect(
         upstream.mock.calls.every(([, init]) => init?.signal?.aborted),
       ).toBe(true)
@@ -251,7 +277,7 @@ describe('image provider BYOK', () => {
         sampleAnalysis,
       ),
     ).rejects.toMatchObject({ code: 'image_provider_unavailable' })
-    expect(canceled).toHaveBeenCalledTimes(4)
+    expect(canceled).toHaveBeenCalledTimes(3)
   })
 
   it('rejects cross-provider models, arbitrary endpoints, retired credentials and empty keys before any call', async () => {

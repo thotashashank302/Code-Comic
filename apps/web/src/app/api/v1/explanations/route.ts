@@ -171,6 +171,7 @@ export async function POST(request: Request) {
       description: prepared.maskedDescription,
       ref: prepared.snapshot.resolvedRef,
       commitSha: prepared.snapshot.commitSha,
+      panelCount: parsedRequest.panelCount,
       evidence: prepared.evidence,
       excludedFiles: prepared.excludedFiles,
       safetyIdentifier: createSafetyIdentifier(
@@ -179,6 +180,7 @@ export async function POST(request: Request) {
       ),
     })
     const scanSummary = {
+      panelCount: parsedRequest.panelCount,
       totalTreeFiles: prepared.totalTreeFiles,
       selectedFileCount: prepared.selectedFiles.length,
       excludedFileCount: prepared.excludedFileCount,

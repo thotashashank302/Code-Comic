@@ -26,7 +26,7 @@ const recordSchema = z.object({
   analysis: comicAnalysisSchema,
   createdAt: z.iso.datetime(),
   expiresAt: z.iso.datetime(),
-  png: z.string().max(14_000_000),
+  png: z.string().max(36_000_000),
 })
 export type LocalComic = z.infer<typeof recordSchema>
 

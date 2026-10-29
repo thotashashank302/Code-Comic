@@ -22,7 +22,7 @@ supabase          CLI config and timestamped database migration
 
 Raw source, reconstructed patches, and prompts containing source exist only in authenticated function or worker memory. They are never written to PostgreSQL, Storage, Trigger.dev payloads or outputs, audit metadata, analytics, or application logs.
 
-OpenAI/Gemini image API keys are accepted only by the authenticated artwork route over HTTPS. They remain in webpage tab or extension panel memory and are never placed in Trigger.dev payloads, server persistence, logs or audit metadata. The chosen image provider receives sanitized illustration prompts from the existing storyboard, without raw repository source. The user's provider account pays for four image requests. See [image BYOK setup](IMAGE_BYOK.md).
+OpenAI/Gemini image API keys are accepted only by the authenticated artwork route over HTTPS. They remain in webpage tab or extension panel memory and are never placed in Trigger.dev payloads, server persistence, logs or audit metadata. The chosen image provider receives sanitized illustration prompts from the existing storyboard, without raw repository source. The user's provider account pays for four or twelve image requests. See [image BYOK setup](IMAGE_BYOK.md).
 
 The authenticated web request scans the inspected immutable commit while the GitHub OAuth token is available, masks source, and persists sanitized analysis and scan metadata. The worker receives only an explanation UUID and composes artwork from that analysis; recovery can rescan when analysis is missing. Raw source is never included in its payload. Optional image BYOK keeps the saved captions/evidence and does not rescan source; hosted repository access is rechecked before generating artwork.
 
@@ -91,7 +91,9 @@ Public repositories work without installing the app. Private repositories requir
 
 ## Supabase setup
 
-The migration was created with Supabase CLI 2.109.1 and enables RLS/forced RLS, explicit service-role grants, constraints, indexes, retention fields, and a private 10 MB PNG bucket.
+The migration was created with Supabase CLI 2.109.1 and enables RLS/forced RLS, explicit service-role grants, constraints, indexes, retention fields, and a private PNG bucket. Apply the later `20261029170443_support_twelve_panel_pngs.sql`
+migration too: it raises the bucket limit from 10 MB to 32 MiB for detailed comics.
+The project-wide Storage upload limit must also be at least 32 MiB.
 
 ```bash
 pnpm dlx supabase@2.109.1 login
@@ -145,7 +147,7 @@ Keys remain in the current tab/panel memory; **Clear API key** removes them.
 Switching providers clears the key so it cannot accidentally reach another
 provider. Obsolete saved Cloudflare credentials are removed by the extension.
 
-Generation creates the free preview first, then makes four image requests using
+Generation creates the free preview first, then makes one image request per panel (four or twelve total) using
 the selected provider. Captions, claims and evidence are unchanged. The new PNG
 replaces the existing artifact only after all panels and composition succeed.
 Failures keep the existing comic available. No automatic paid retries run.

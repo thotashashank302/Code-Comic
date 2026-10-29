@@ -5,6 +5,7 @@ import type { ComicAnalysis } from '@comic-code/contracts'
 
 import { composeComic } from './compose'
 import { createStoryboardFallbackArtwork } from './images'
+import { sampleDetailedAnalysis } from './sample'
 
 const analysis: ComicAnalysis = {
   plainLanguageSummary: 'A safe sample explanation.',
@@ -45,6 +46,25 @@ const analysis: ComicAnalysis = {
 }
 
 describe('composeComic', () => {
+  it('composes twelve panels through the final row at full readable size', async () => {
+    const artwork = await createStoryboardFallbackArtwork(
+      sampleDetailedAnalysis,
+    )
+    expect(artwork).toHaveLength(12)
+    expect(artwork.map((panel) => panel.sequence)).toEqual(
+      Array.from({ length: 12 }, (_, index) => index + 1),
+    )
+    const comic = await composeComic(sampleDetailedAnalysis, artwork)
+    expect(await sharp(comic).metadata()).toMatchObject({
+      width: 1600,
+      height: 3540,
+    })
+    const lastRow = await sharp(comic)
+      .extract({ left: 28, top: 2997, width: 744, height: 354 })
+      .stats()
+    expect(lastRow.isOpaque).toBe(true)
+    expect(lastRow.channels.some((channel) => channel.stdev > 15)).toBe(true)
+  })
   it('keeps generated artwork visible under the text overlay', async () => {
     const artwork = await sharp({
       create: {

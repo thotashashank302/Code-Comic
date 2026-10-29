@@ -34,6 +34,9 @@
     "@comic-code/database#build": {
       "outputs": []
     },
+    "@comic-code/ui#build": {
+      "outputs": []
+    },
     "@comic-code/github#build": {
       "outputs": []
     },

@@ -76,3 +76,12 @@ On 2026-07-20, `pnpm audit --prod` reported no known vulnerabilities after scope
 ## Reporting
 
 Do not include private source, secrets, tokens, or full request logs in a report. Revoke affected credentials first, then provide a minimal reproduction through the repository’s private security-reporting channel.
+
+## Manual artwork
+
+The shared browser artwork studio accepts PNG/JPEG/WebP files up to 8 MB each,
+checks decoded images against a 40-megapixel limit, and composes four or twelve
+panels on a local Canvas. It makes no upload or AI-provider requests. Object URLs
+are revoked when artwork changes or the component closes. Manual artwork is not
+added to persisted comics or shared artifacts. The extension browser preview
+permits blob images while keeping API connections blocked.

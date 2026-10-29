@@ -22,7 +22,9 @@ Verify:
 - `explanations`, `shares`, `usage_events`, and `audit_events` exist.
 - RLS and forced RLS are enabled.
 - anon/authenticated roles have no table grants.
-- `comic-artifacts` exists and is private with a 10 MB PNG limit.
+- `comic-artifacts` exists and is private with a 32 MiB PNG limit after all migrations, including
+  `20261029170443_support_twelve_panel_pngs.sql`. The project-wide Storage
+  upload limit must also be at least 32 MiB.
 
 ## 3. Trigger.dev
 

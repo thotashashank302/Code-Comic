@@ -1,6 +1,6 @@
 # Comic Code
 
-Turn a public GitHub repository into a four-panel comic with evidence links.
+Turn a public GitHub repository into a four- or twelve-panel comic with evidence links.
 The default local mode runs on your computer: no login, database account,
 background-worker account, AI key, or hosting subscription is required.
 
@@ -21,7 +21,14 @@ comics** after a restart. Leave the API key empty for the free flow.
 
 Choose **Explore a sample** or **Try the sample** to inspect the bundled example
 story and evidence without contacting GitHub or image providers. The sample is labeled
-illustrative; it does not pretend to be a fresh scan. You can download its PNG.
+illustrative; it does not pretend to be a fresh scan. You can download its PNG. Twelve panels are selected by default; choose four
+for a quick overview. Existing saved comics keep their original length.
+
+To test image composition without an API key, open **Use your own images · no
+API key**, choose **Load sample artwork**, then **Compose 12-panel PNG**. You
+can also copy each panel prompt into an image tool manually and choose the
+resulting PNG/JPEG/WebP files. Files stay in browser memory; download the result
+before closing or changing the story. See [the manual artwork guide](docs/MANUAL_ARTWORK.md).
 
 Open **http://127.0.0.1:3000/extension** for the actual built side-panel interface
 in a browser. Explain, Story, Evidence and compact-layout controls work with sample
@@ -45,7 +52,7 @@ or prove that the repository is correct. A scan selects up to 40 files and
   A large scan can use most of that allowance. An optional server-side
   `GITHUB_TOKEN` raises the limit; no token is needed to start.
 - Optional OpenAI or Google Gemini image generation uses **your own API key**.
-  Four panel images use your selected provider's quota and billing. Free API
+  Four or twelve panel images use your selected provider's quota and billing. Free API
   access is not guaranteed. Captions and evidence come from the saved storyboard
   and are not rewritten by the image provider. A failed request preserves the
   existing comic. See [image BYOK setup](docs/IMAGE_BYOK.md).
@@ -104,8 +111,8 @@ before building. The manifest grants access to that exact API origin.
 - Choose **OpenAI** or **Google Gemini**, choose an image model available to your
   account, and enter that provider's API key. Keys from other providers are not
   interchangeable. Switching providers clears the entered key.
-- Generate a comic or select **Generate 4 AI panels** on a saved comic. Four
-  provider requests create the illustrations; captions and evidence stay intact.
+- Generate a comic or select **Generate 4 AI panels** or **Generate 12 AI panels** on a saved comic. One
+  provider request per panel creates an illustration; captions and evidence stay intact.
 - Keys remain in current tab/panel memory. **Clear API key** removes the value.
   There is no API call just for entering a key or changing a provider.
 - Sample mode lets you inspect providers/models with key entry disabled. No
@@ -122,6 +129,7 @@ apps/web/             Next.js UI, APIs, local runtime, optional hosted worker
 apps/extension/       Chrome Manifest V3 side panel and GitHub page integration
 packages/comic/       Grounded analysis, optional providers and PNG composition
 packages/contracts/   Shared request and response validation
+packages/ui/          Browser-only manual artwork studio and PNG export
 packages/github/      GitHub access, file selection, source masking and evidence
 packages/database/    Optional Supabase repository and private artifact storage
 supabase/             Hosted database migrations

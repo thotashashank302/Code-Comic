@@ -102,7 +102,7 @@ export async function createStoryboardFallbackArtwork(
   ]
   return Promise.all(
     analysis.panels.map(async (panel, index) => {
-      const { paper, ink, soft } = colors[index]!
+      const { paper, ink, soft } = colors[index % colors.length]!
       const diagrams = [
         `<rect x="310" y="190" width="620" height="540" rx="42" fill="#fff"/><rect x="366" y="270" width="205" height="22" rx="11" fill="${ink}"/><rect x="366" y="340" width="498" height="76" rx="18" fill="${paper}"/><rect x="366" y="451" width="498" height="76" rx="18" fill="${paper}"/><rect x="366" y="569" width="195" height="66" rx="33" fill="${ink}"/><path d="M974 453h240m-58-58 58 58-58 58" fill="none" stroke="${ink}" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>`,
         `<rect x="354" y="210" width="827" height="514" rx="40" fill="#fff"/>${[0, 1, 2].map((n) => `<circle cx="452" cy="${320 + n * 144}" r="34" fill="${soft}"/><path d="m435 ${320 + n * 144} 12 12 23-27" stroke="${ink}" stroke-width="9" fill="none" stroke-linecap="round"/><rect x="523" y="${299 + n * 144}" width="${477 - n * 72}" height="21" rx="10" fill="${ink}"/><rect x="523" y="${337 + n * 144}" width="${300 + n * 26}" height="14" rx="7" fill="${soft}"/>`).join('')}`,
@@ -110,7 +110,7 @@ export async function createStoryboardFallbackArtwork(
         `<rect x="310" y="180" width="848" height="550" rx="40" fill="#fff"/><rect x="368" y="245" width="305" height="27" rx="13" fill="${ink}"/>${[0, 1, 2].map((n) => `<rect x="368" y="${330 + n * 106}" width="727" height="77" rx="17" fill="${paper}"/><rect x="394" y="${353 + n * 106}" width="240" height="12" rx="6" fill="${ink}"/><rect x="394" y="${377 + n * 106}" width="143" height="9" rx="4" fill="${soft}"/>`).join('')}<circle cx="1150" cy="213" r="90" fill="${ink}"/><path d="m1110 211 27 27 54-62" fill="none" stroke="#fff" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>`,
       ]
       const svg = Buffer.from(
-        `<svg width="1536" height="1024" viewBox="0 0 1536 1024" xmlns="http://www.w3.org/2000/svg"><rect width="1536" height="1024" fill="${paper}"/><circle cx="1410" cy="60" r="335" fill="${soft}" opacity=".36"/><circle cx="80" cy="980" r="270" fill="${soft}" opacity=".25"/>${diagrams[index]}</svg>`,
+        `<svg width="1536" height="1024" viewBox="0 0 1536 1024" xmlns="http://www.w3.org/2000/svg"><rect width="1536" height="1024" fill="${paper}"/><circle cx="1410" cy="60" r="335" fill="${soft}" opacity=".36"/><circle cx="80" cy="980" r="270" fill="${soft}" opacity=".25"/>${diagrams[index % diagrams.length]}</svg>`,
       )
 
       return {

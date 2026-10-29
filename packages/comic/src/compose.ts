@@ -1,12 +1,11 @@
 import type { ComicAnalysis } from '@comic-code/contracts'
 import { hasByokArtwork } from '@comic-code/contracts/image-providers'
+import { comicDimensions } from '@comic-code/contracts/comic-layout'
 import sharp from 'sharp'
 
 import type { GeneratedPanelArtwork } from './types'
 import { normalizePixelText, pixelTextSvg } from './pixel-font'
 
-const comicWidth = 1_600
-const comicHeight = 1_200
 const panelWidth = 800
 const panelHeight = 585
 const footerHeight = 30
@@ -72,7 +71,7 @@ async function composePanel(input: {
       <rect x="14" y="14" width="772" height="557" rx="22" fill="none" stroke="#d6dfcc" stroke-width="3" />
       <rect x="18" y="426" width="764" height="141" rx="18" fill="#fcfdf8" fill-opacity="0.96" />
       <circle cx="45" cy="44" r="19" fill="#d3e3ad" />
-      ${pixelTextSvg(String(input.sequence), { x: 41, y: 36, scale: 2.4, color: '#26482c' })}
+      ${pixelTextSvg(String(input.sequence), { x: input.sequence >= 10 ? 32 : 41, y: 36, scale: 2.4, color: '#26482c' })}
       ${pixelTextSvg(input.title, { x: 76, y: 34, scale: 3, color: '#19251c' })}
       ${textLinesSvg(captionLines, { x: 28, startY: 442, lineHeight: 25, scale: 2.15, color: '#28382a' })}
       ${textLinesSvg(uncertaintyLines, { x: 28, startY: 535, lineHeight: 17, scale: 1.45, color: '#64715d' })}
@@ -99,6 +98,9 @@ export async function composeComic(
   analysis: ComicAnalysis,
   artwork: GeneratedPanelArtwork[],
 ) {
+  const { width: comicWidth, height: comicHeight } = comicDimensions(
+    analysis.panels.length,
+  )
   const artworkBySequence = new Map(
     artwork.map((panel) => [panel.sequence, panel.png]),
   )
@@ -136,10 +138,11 @@ export async function composeComic(
     },
   })
     .composite([
-      { input: panels[0]!, left: 0, top: 0 },
-      { input: panels[1]!, left: panelWidth, top: 0 },
-      { input: panels[2]!, left: 0, top: panelHeight },
-      { input: panels[3]!, left: panelWidth, top: panelHeight },
+      ...panels.map((panel, index) => ({
+        input: panel,
+        left: (index % 2) * panelWidth,
+        top: Math.floor(index / 2) * panelHeight,
+      })),
       { input: footer, left: 0, top: comicHeight - footerHeight },
     ])
     .png()

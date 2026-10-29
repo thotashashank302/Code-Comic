@@ -4,13 +4,15 @@ Comic Code supports **OpenAI** and **Google Gemini** image keys. Cloudflare
 Account IDs, Workers AI tokens and FLUX generation have been removed from the
 active generation flow. Existing Cloudflare-generated comics remain readable.
 
+For testing without API credits, use [manual artwork](MANUAL_ARTWORK.md).
+
 ## Use it
 
 1. Open **API key / BYOK** in the web navigation, or below the extension header.
 2. Choose the provider and an image model available to your account.
 3. Enter that provider's API key in the masked field.
 4. Inspect a repository and generate a comic, or select **Generate 4 AI panels**
-   on a saved comic. Four requests create four illustrations; Comic Code adds
+   or **Generate 12 AI panels** on a saved comic. One request per panel creates the illustrations; Comic Code adds
    the saved captions and composes the PNG.
 
 | Provider      | Default                  | Other available choices                             | Key                                                     |
@@ -49,14 +51,16 @@ storage with `store: false`.
 - Official endpoints and provider-specific model choices are fixed. Arbitrary
   base URLs and URL-only outputs are rejected. Keys are never placed in URLs;
   redirects are disabled.
-- Four distinct prompts run concurrently, with a 180-second overall deadline.
+- Four or twelve distinct prompts run with at most three concurrent requests,
+  with a 180-second overall deadline. Twelve panels use three times as many
+  image requests as four panels.
   There are no automatic paid retries. A failure aborts remaining requests;
   requests already processed by a provider may still consume quota or credits.
 - Responses are byte-bounded; only PNG/JPEG/WebP signatures are accepted and
   decoded image size is limited. Images are normalized to PNG before composition.
 - Invalid keys, exhausted quota, unavailable models, rejected prompts and
   outages have separate safe errors. Provider response bodies are not exposed.
-  Existing PNGs are replaced only after all four images and composition succeed.
+  Existing PNGs are replaced only after all selected images and composition succeed.
 
 Billing, image-model access and quota belong to the user's provider account.
 An API key does not guarantee free image generation or higher GitHub limits.

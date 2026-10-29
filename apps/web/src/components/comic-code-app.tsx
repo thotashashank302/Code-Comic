@@ -8,7 +8,12 @@ import {
 } from '@comic-code/contracts/image-providers'
 
 import type { ComicAnalysis } from '@comic-code/contracts'
-import { sampleExplanation, sampleRepository } from '@comic-code/comic/sample'
+import {
+  getSampleExplanation,
+  getSampleRepository,
+} from '@comic-code/comic/sample'
+import type { PanelCount } from '@comic-code/contracts/comic-layout'
+import { ManualArtwork } from '@comic-code/ui'
 
 import { BrandMark } from '@/components/brand-mark'
 import { Storyboard } from '@/components/storyboard'
@@ -137,6 +142,7 @@ export function ComicCodeApp() {
   const [authChecked, setAuthChecked] = useState(false)
   const [localMode, setLocalMode] = useState(false)
   const [sampleMode, setSampleMode] = useState(false)
+  const [panelCount, setPanelCount] = useState<PanelCount>(12)
   const [recent, setRecent] = useState<Explanation[]>([])
   const [repositoryUrl, setRepositoryUrl] = useState('')
   const [repository, setRepository] = useState<Repository | null>(null)
@@ -158,6 +164,8 @@ export function ComicCodeApp() {
     imageApiKey.trim().length >= 20 &&
     imageApiKey.trim().length <= 2_048 &&
     !/\s/.test(imageApiKey.trim())
+
+  const activePanelCount = explanation?.analysis?.panels.length ?? panelCount
 
   useEffect(() => {
     const controller = new AbortController()
@@ -246,7 +254,7 @@ export function ComicCodeApp() {
 
   const generate = async () => {
     if (sampleMode) {
-      setExplanation(sampleExplanation)
+      setExplanation(getSampleExplanation(panelCount))
       return
     }
     if (!repository) return
@@ -265,6 +273,7 @@ export function ComicCodeApp() {
             ref: repository.ref,
             commitSha: repository.commitSha,
             forceRegenerate: Boolean(explanation),
+            panelCount,
           }),
         },
       )
@@ -328,7 +337,7 @@ export function ComicCodeApp() {
         setExplanation(result.explanation)
         setAiGenerationRequested(false)
         setArtworkNotice(
-          'Four panels generated with your image API key. Captions and evidence are unchanged.',
+          `${target.analysis.panels.length} panels generated with your image API key. Captions and evidence are unchanged.`,
         )
       } catch (caught) {
         const failed = await api<{ explanation: Explanation }>(
@@ -406,8 +415,8 @@ export function ComicCodeApp() {
     setError(null)
     setArtworkNotice(null)
     setShareNotice(null)
-    setRepository(sampleRepository)
-    setExplanation(sampleExplanation)
+    setRepository(getSampleRepository(panelCount))
+    setExplanation(getSampleExplanation(panelCount))
     requestAnimationFrame(() =>
       document
         .getElementById('workspace')
@@ -478,6 +487,31 @@ export function ComicCodeApp() {
             Try the sample
           </button>
         </div>
+        <div className="story-length">
+          <label htmlFor="story-panel-count">Story length for new comics</label>
+          <select
+            id="story-panel-count"
+            value={panelCount}
+            disabled={busy || artworkBusy}
+            onChange={(event) => {
+              const count = Number(event.target.value) as PanelCount
+              setPanelCount(count)
+              pendingImage.current = false
+              setAiGenerationRequested(false)
+              if (sampleMode) {
+                setRepository(getSampleRepository(count))
+                setExplanation(getSampleExplanation(count))
+              }
+            }}
+          >
+            <option value="12">12 panels · detailed walkthrough</option>
+            <option value="4">4 panels · quick overview</option>
+          </select>
+          <small>
+            More panels add context. Existing saved comics keep their original
+            length.
+          </small>
+        </div>
         {sampleMode ? (
           <div className="notice notice--sample" role="status">
             <strong>You’re exploring a sample.</strong>
@@ -511,9 +545,9 @@ export function ComicCodeApp() {
             <h3 id="image-setup-title">Bring your own image AI</h3>
             <p>
               Choose a provider and image model, then enter your API key. Your
-              account generates four illustrations for the saved storyboard.
-              Captions and evidence stay unchanged. Leave the key empty for free
-              bundled artwork.
+              account generates {activePanelCount} illustrations for the saved
+              storyboard. Captions and evidence stay unchanged. Leave the key
+              empty for free bundled artwork.
             </p>
           </div>
           {sampleMode ? (
@@ -583,8 +617,8 @@ export function ComicCodeApp() {
           <p className="byok-privacy">
             The key stays in this tab and passes through Comic Code only for
             requested image generation. It is never saved on the server. Only
-            illustration prompts are sent to the selected provider. Four images
-            use your provider’s quota and billing.{' '}
+            illustration prompts are sent to the selected provider.{' '}
+            {activePanelCount} images use your provider’s quota and billing.{' '}
             <a
               href={imageProviders[imageProvider].keyUrl}
               target="_blank"
@@ -604,8 +638,8 @@ export function ComicCodeApp() {
                 disabled={!imageReady || artworkBusy || busy}
               >
                 {artworkBusy
-                  ? 'Generating 4 AI panels…'
-                  : 'Generate 4 AI panels'}
+                  ? `Generating ${activePanelCount} AI panels…`
+                  : `Generate ${activePanelCount} AI panels`}
               </button>
             ) : (
               <span className="success-text" role="status">
@@ -751,7 +785,7 @@ export function ComicCodeApp() {
                 <h3>
                   {aiGenerationRequested &&
                   !hasByokArtwork(explanation.analysis?.artworkProvider)
-                    ? 'Generating 4 AI comic panels…'
+                    ? `Generating ${activePanelCount} AI comic panels…`
                     : explanation.progress.message}
                 </h3>
               </div>
@@ -775,11 +809,17 @@ export function ComicCodeApp() {
             explanation.status !== 'failed' &&
             (!aiGenerationRequested ||
               hasByokArtwork(explanation.analysis.artworkProvider)) ? (
-              <Storyboard
-                sample={sampleMode}
-                analysis={explanation.analysis}
-                artifactUrl={explanation.artifactUrl}
-              />
+              <>
+                <ManualArtwork
+                  key={`${explanation.id}:${explanation.analysis.panels.length}`}
+                  analysis={explanation.analysis}
+                />
+                <Storyboard
+                  sample={sampleMode}
+                  analysis={explanation.analysis}
+                  artifactUrl={explanation.artifactUrl}
+                />
+              </>
             ) : null}
             {explanation.analysis &&
             explanation.status !== 'failed' &&

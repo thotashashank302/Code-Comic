@@ -41,6 +41,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   transpilePackages: [
     '@comic-code/comic',
+    '@comic-code/ui',
     '@comic-code/contracts',
     '@comic-code/database',
     '@comic-code/github',
@@ -58,7 +59,7 @@ const nextConfig: NextConfig = {
           {
             key: 'Content-Security-Policy',
             value:
-              "default-src 'self'; base-uri 'none'; connect-src 'none'; font-src 'self'; frame-ancestors 'self'; img-src 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'",
+              "default-src 'self'; base-uri 'none'; connect-src 'none'; font-src 'self'; frame-ancestors 'self'; img-src 'self' blob:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'",
           },
         ],
       },

@@ -90,6 +90,36 @@ afterEach(async () => {
 })
 
 describe('free local flow', () => {
+  it('keeps four and twelve-panel requests distinct, persists twelve chapters and composes the complete PNG', async () => {
+    const first = await (
+      await handleLocalApi(request('/v1/explanations', 'POST', input))
+    ).json()
+    const detailedInput = { ...input, panelCount: 12 }
+    const detailed = await (
+      await handleLocalApi(request('/v1/explanations', 'POST', detailedInput))
+    ).json()
+    expect(detailed.explanation.id).not.toBe(first.explanation.id)
+    expect(detailed.explanation.analysis.panels).toHaveLength(12)
+    expect(
+      (await new LocalStore(directory).get(detailed.explanation.id))
+        ?.scanSummary.panelCount,
+    ).toBe(12)
+    const png = await handleLocalApi(
+      request(`/v1/explanations/${detailed.explanation.id}/download`),
+    )
+    expect(
+      await sharp(Buffer.from(await png.arrayBuffer())).metadata(),
+    ).toMatchObject({ width: 1600, height: 3540 })
+    const reused = await (
+      await handleLocalApi(request('/v1/explanations', 'POST', detailedInput))
+    ).json()
+    expect(reused.explanation.id).toBe(detailed.explanation.id)
+    expect(prepareRepository).toHaveBeenCalledTimes(2)
+    const invalid = await handleLocalApi(
+      request('/v1/explanations', 'POST', { ...input, panelCount: 8 }),
+    )
+    expect(invalid.status).toBe(400)
+  })
   it('inspects, composes a real PNG, persists across stores, reuses a request and deletes artifacts', async () => {
     const inspected = await handleLocalApi(
       request('/v1/github/repository?url=https://github.com/owner/example'),

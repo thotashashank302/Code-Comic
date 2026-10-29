@@ -18,7 +18,7 @@ new palette; old saved comics retain their original artwork.
 ## Reviewing without provider quota
 
 The web **Explore a sample** / **Try the sample** controls use illustrative data
-from `packages/comic/src/sample.ts`, including four panels and four evidence
+from `packages/comic/src/sample.ts`, including four- and twelve-panel stories with four illustrative evidence
 locators. The sample is never recorded as a live scan or persisted in the comic
 store. It can be downloaded from `/sample-comic.png`, generated entirely from
 local SVG templates during the web build.

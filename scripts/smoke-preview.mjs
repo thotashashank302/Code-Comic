@@ -15,7 +15,9 @@ const read = async (path) => {
 }
 const landing = await (await read('/')).text()
 assert(landing.includes('Explore a sample'))
-checks.push('web sample entry point loads')
+assert(landing.includes('id="story-panel-count"'))
+assert(landing.includes('value="12"'))
+checks.push('web sample entry point and twelve-panel story choice load')
 assert(landing.includes('href="#api-key"'))
 assert(landing.includes('id="image-provider"'))
 assert(landing.includes('id="image-model"'))
@@ -35,6 +37,12 @@ assert(
 checks.push(
   'browser preview blocks API connections and allows only same-origin framing',
 )
+assert(
+  frame.headers
+    .get('content-security-policy')
+    ?.includes("img-src 'self' blob:"),
+)
+checks.push('local artwork blob previews are allowed without API connections')
 const html = await frame.text()
 const assets = [...html.matchAll(/(?:src|href)="(\.\/[^\"]+)"/g)].map(
   (match) => match[1],
@@ -59,4 +67,11 @@ assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a')
 assert.equal(png.readUInt32BE(16), 1600)
 assert.equal(png.readUInt32BE(20), 1200)
 checks.push('bundled sample is a full 1600 by 1200 PNG')
+const detailed = Buffer.from(
+  await (await read('/sample-comic-12.png')).arrayBuffer(),
+)
+assert.equal(detailed.subarray(0, 8).toString('hex'), '89504e470d0a1a0a')
+assert.equal(detailed.readUInt32BE(16), 1600)
+assert.equal(detailed.readUInt32BE(20), 3540)
+checks.push('detailed sample is a full 1600 by 3540 twelve-panel PNG')
 console.log(JSON.stringify({ ok: true, providerRequests: 0, checks }, null, 2))

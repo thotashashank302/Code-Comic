@@ -35,7 +35,15 @@ export default function ExtensionPreviewPage() {
           <ul>
             <li>Try the Explain, Story and Evidence tabs.</li>
             <li>Use “View sample story” to see the comic.</li>
-            <li>Download the bundled sample PNG.</li>
+            <li>
+              Choose twelve panels for a detailed story, or four for a quick
+              view.
+            </li>
+            <li>
+              In Story, open “Use your own images · no API key”. Load sample
+              artwork or choose your own files, compose the comic and download
+              it.
+            </li>
             <li>
               Expand “API key / BYOK” to see the image provider, model and key
               fields. Key entry is disabled in this sample; use the installed

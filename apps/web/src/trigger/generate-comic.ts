@@ -120,6 +120,8 @@ export const generateComicTask = schemaTask({
           description: prepared.maskedDescription,
           ref: prepared.snapshot.resolvedRef,
           commitSha: prepared.snapshot.commitSha,
+          panelCount:
+            row.scan_summary.panelCount === 12 ? (12 as const) : (4 as const),
           evidence: prepared.evidence,
           excludedFiles: prepared.excludedFiles,
           safetyIdentifier,

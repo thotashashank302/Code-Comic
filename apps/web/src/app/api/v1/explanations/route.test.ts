@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  analyze: vi.fn(),
   github: {
     assertUserCanReadRepository: vi.fn(),
     getRepositorySnapshot: vi.fn(),
@@ -22,7 +23,7 @@ vi.mock('@trigger.dev/sdk', () => ({
   tasks: { trigger: mocks.trigger },
 }))
 vi.mock('@comic-code/comic', () => ({
-  createDeterministicComicAnalysis: () => ({ claims: [] }),
+  createDeterministicComicAnalysis: mocks.analyze,
   createSafetyIdentifier: () => 'safe',
 }))
 vi.mock('@comic-code/github', () => ({
@@ -62,7 +63,7 @@ vi.mock('@/lib/server', () => ({
 import { POST } from './route'
 
 const sha = 'a'.repeat(40)
-function request(commitSha: string | null = sha) {
+function request(commitSha: string | null = sha, panelCount = 4) {
   return new Request('https://example.com/api/v1/explanations', {
     method: 'POST',
     headers: {
@@ -74,12 +75,14 @@ function request(commitSha: string | null = sha) {
       repository: 'repo',
       ref: 'feature/fix',
       commitSha: commitSha ?? undefined,
+      panelCount,
     }),
   })
 }
 
 beforeEach(() => {
   vi.resetAllMocks()
+  mocks.analyze.mockReturnValue({ claims: [] })
   mocks.github.assertUserCanReadRepository.mockResolvedValue({
     isPrivate: false,
   })
@@ -124,6 +127,23 @@ beforeEach(() => {
 })
 
 describe('captured repository generation and dispatch recovery', () => {
+  it('keeps the selected twelve-panel count in analysis and recovery metadata', async () => {
+    expect((await POST(request(sha, 12))).status).toBe(202)
+    expect(mocks.analyze).toHaveBeenCalledWith(
+      expect.objectContaining({ panelCount: 12 }),
+    )
+    expect(mocks.saveScan).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        scanSummary: expect.objectContaining({ panelCount: 12 }),
+      }),
+    )
+    expect(mocks.trigger).toHaveBeenCalledWith(
+      'generate-comic',
+      { explanationId: 'explanation' },
+      expect.anything(),
+    )
+  })
   it('uses the inspected commit even after the branch moves', async () => {
     const response = await POST(request())
     expect(response.status).toBe(202)

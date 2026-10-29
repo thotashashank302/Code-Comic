@@ -16,10 +16,11 @@ export type AnalysisInput = {
   evidence: AnalysisEvidence[]
   excludedFiles: string[]
   safetyIdentifier: string
+  panelCount?: 4 | 12
 }
 
 export type GeneratedPanelArtwork = {
-  sequence: 1 | 2 | 3 | 4
+  sequence: number
   png: Buffer
 }
 

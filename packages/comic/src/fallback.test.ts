@@ -39,6 +39,32 @@ const input = {
 }
 
 describe('deterministic quota fallback', () => {
+  it('adds twelve evidence-linked chapters and marks undetected behavior as uncertain', () => {
+    const analysis = createDeterministicComicAnalysis({
+      ...input,
+      panelCount: 12,
+    })
+    expect(analysis.panels).toHaveLength(12)
+    expect(analysis.claims).toHaveLength(12)
+    expect(new Set(analysis.panels.map((panel) => panel.title)).size).toBe(12)
+    expect(analysis.panels.map((panel) => panel.sequence)).toEqual(
+      Array.from({ length: 12 }, (_, i) => i + 1),
+    )
+    expect(analysis.panels[8]!.caption).toMatch(
+      /No database operations pattern/,
+    )
+    expect(analysis.panels[8]!.confidence).toBe('low')
+    expect(analysis.panels[7]!.caption).toMatch(/Network-related patterns/)
+    const evidence = new Set(analysis.evidence.map((item) => item.id))
+    expect(
+      analysis.claims.every((claim) =>
+        claim.evidenceIds.every((id) => evidence.has(id)),
+      ),
+    ).toBe(true)
+    expect(JSON.stringify(analysis)).not.toContain(
+      input.evidence[1]!.maskedText,
+    )
+  })
   it('creates a complete grounded storyboard without repeating untrusted text', () => {
     const analysis = createDeterministicComicAnalysis(input)
     const serialized = JSON.stringify(analysis)
@@ -51,7 +77,7 @@ describe('deterministic quota fallback', () => {
     expect(serialized).not.toContain(input.description)
     expect(serialized).not.toContain(input.evidence[1]!.maskedText)
     expect(deterministicFallbackModels.analysis).toBe(
-      'deterministic-source-scan-v5',
+      'deterministic-source-scan-v6',
     )
   })
 
@@ -87,10 +113,10 @@ describe('deterministic quota fallback', () => {
     })
     const serialized = JSON.stringify(analysis)
 
-    expect(analysis.panels[1].caption).toMatch(
+    expect(analysis.panels[1]!.caption).toMatch(
       /checks information before using it/,
     )
-    expect(analysis.panels[2].caption).toMatch(
+    expect(analysis.panels[2]!.caption).toMatch(
       /talks to another online service/,
     )
     expect(analysis.plainLanguageSummary).toMatch(/sampled source/)

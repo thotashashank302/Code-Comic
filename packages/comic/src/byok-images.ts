@@ -201,22 +201,36 @@ export async function generateByokPanelArtwork(
     controller.signal,
     AbortSignal.timeout(180_000),
   ])
-  const jobs = analysis.panels.map(async (panel) => ({
-    sequence: panel.sequence,
-    png: await generateImage(
-      settings,
-      [
-        sanitizeScenePrompt(analysis.sharedVisualStyle),
-        sanitizeScenePrompt(panel.scenePrompt),
-        `Create one distinct comic illustration for panel ${panel.sequence}: ${panel.purpose}.`,
-        'Light ivory, chartreuse, blush pink, cool blue and peach editorial illustration with dark green linework. Keep the same visual style across the story.',
-        'No visible text, code, letters, numbers, labels, logos, signatures, speech bubbles or watermarks. Captions are added separately.',
-      ].join('\n\n'),
-      signal,
-    ),
-  }))
+  const artwork: GeneratedPanelArtwork[] = new Array(analysis.panels.length)
+  let cursor = 0
+  const jobs = Array.from(
+    { length: Math.min(3, analysis.panels.length) },
+    async () => {
+      while (!signal.aborted) {
+        const index = cursor++
+        const panel = analysis.panels[index]
+        if (!panel) return
+        artwork[index] = {
+          sequence: panel.sequence,
+          png: await generateImage(
+            settings,
+            [
+              sanitizeScenePrompt(analysis.sharedVisualStyle),
+              sanitizeScenePrompt(panel.scenePrompt),
+              `Create one distinct comic illustration for panel ${panel.sequence}: ${panel.purpose}.`,
+              'Light ivory, chartreuse, blush pink, cool blue and peach editorial illustration with dark green linework. Keep the same visual style across the story.',
+              'No visible text, code, letters, numbers, labels, logos, signatures, speech bubbles or watermarks. Captions are added separately.',
+            ].join('\n\n'),
+            signal,
+          ),
+        }
+      }
+      signal.throwIfAborted()
+    },
+  )
   try {
-    return await Promise.all(jobs)
+    await Promise.all(jobs)
+    return artwork
   } catch (error) {
     controller.abort()
     await Promise.allSettled(jobs)

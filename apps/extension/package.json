@@ -15,7 +15,8 @@
     "@comic-code/contracts": "workspace:*",
     "react": "19.2.7",
     "react-dom": "19.2.7",
-    "@comic-code/comic": "workspace:*"
+    "@comic-code/comic": "workspace:*",
+    "@comic-code/ui": "workspace:*"
   },
   "devDependencies": {
     "@types/chrome": "0.2.2",

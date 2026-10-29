@@ -7,7 +7,13 @@ import {
 } from '@comic-code/contracts/image-providers'
 
 import type { ComicAnalysis } from '@comic-code/contracts'
-import { sampleRepository, sampleExplanation } from '@comic-code/comic/sample'
+import {
+  getSampleRepository,
+  getSampleExplanation,
+} from '@comic-code/comic/sample'
+import type { PanelCount } from '@comic-code/contracts/comic-layout'
+import { ManualArtwork } from '@comic-code/ui'
+import '@comic-code/ui/styles.css'
 import { parseGitHubRepositoryUrl } from '@comic-code/contracts/repository-url'
 
 import { BrandGlyph } from './brand-glyph'
@@ -205,28 +211,32 @@ async function requestApi<T>(
 const previewDocument =
   new URLSearchParams(window.location.search).get('preview') === '1'
 
-const bundledSample = {
-  ...sampleExplanation,
-  artifactUrl: new URL(
-    '/sample-comic.png',
-    previewDocument ? window.location.origin : apiBase,
-  ).href,
+function bundledSampleFor(count: PanelCount) {
+  const sample = getSampleExplanation(count)
+  return {
+    ...sample,
+    artifactUrl: new URL(
+      sample.artifactUrl,
+      previewDocument ? window.location.origin : apiBase,
+    ).href,
+  }
 }
 
 function SidePanelShell() {
   const [sampleMode, setSampleMode] = useState(previewDocument)
+  const [panelCount, setPanelCount] = useState<PanelCount>(12)
   const [coordinate, setCoordinate] = useState<Coordinate | null>(
-    previewDocument ? sampleRepository : null,
+    previewDocument ? getSampleRepository(12) : null,
   )
   const [session, setSession] = useState<string | null>(
     previewDocument ? 'sample-preview' : null,
   )
   const [localMode, setLocalMode] = useState(previewDocument)
   const [repository, setRepository] = useState<Repository | null>(
-    previewDocument ? sampleRepository : null,
+    previewDocument ? getSampleRepository(12) : null,
   )
   const [explanation, setExplanation] = useState<Explanation | null>(
-    previewDocument ? bundledSample : null,
+    previewDocument ? bundledSampleFor(12) : null,
   )
   const [activeTab, setActiveTab] = useState<Tab>('explain')
   const [busy, setBusy] = useState(false)
@@ -248,6 +258,8 @@ function SidePanelShell() {
     imageApiKey.trim().length >= 20 &&
     imageApiKey.trim().length <= 2_048 &&
     !/\s/.test(imageApiKey.trim())
+
+  const activePanelCount = explanation?.analysis?.panels.length ?? panelCount
 
   useEffect(() => {
     if (sampleMode) return
@@ -470,7 +482,7 @@ function SidePanelShell() {
 
   const generate = async () => {
     if (sampleMode) {
-      setExplanation(bundledSample)
+      setExplanation(bundledSampleFor(panelCount))
       setActiveTab('story')
       setNotice('Illustrative sample · no API requests or credits used.')
       return
@@ -493,6 +505,7 @@ function SidePanelShell() {
             ref: repository.ref,
             commitSha: repository.commitSha,
             forceRegenerate: Boolean(explanation),
+            panelCount,
           }),
         },
       )
@@ -557,7 +570,9 @@ function SidePanelShell() {
         }
         setAiGenerationRequested(false)
         setActiveTab('story')
-        setNotice('Four AI panels ready. Captions and evidence are unchanged.')
+        setNotice(
+          `${target.analysis.panels.length} AI panels ready. Captions and evidence are unchanged.`,
+        )
       } catch (caught) {
         const failed = await requestApi<{ explanation: Explanation }>(
           `/api/v1/explanations/${target.id}`,
@@ -627,9 +642,9 @@ function SidePanelShell() {
     pendingImage.current = false
     setSampleMode(true)
     setLocalMode(true)
-    setCoordinate(sampleRepository)
-    setRepository(sampleRepository)
-    setExplanation(bundledSample)
+    setCoordinate(getSampleRepository(panelCount))
+    setRepository(getSampleRepository(panelCount))
+    setExplanation(bundledSampleFor(panelCount))
     setSession('sample-preview')
     setActiveTab('explain')
     setError(null)
@@ -698,6 +713,28 @@ function SidePanelShell() {
           </>
         )}
       </div>
+      <div className="story-length">
+        <label htmlFor="side-panel-count">Story length for new comics</label>
+        <select
+          id="side-panel-count"
+          value={panelCount}
+          disabled={busy || artworkBusy}
+          onChange={(event) => {
+            const count = Number(event.target.value) as PanelCount
+            setPanelCount(count)
+            pendingImage.current = false
+            setAiGenerationRequested(false)
+            if (sampleMode) {
+              setCoordinate(getSampleRepository(count))
+              setRepository(getSampleRepository(count))
+              setExplanation(bundledSampleFor(count))
+            }
+          }}
+        >
+          <option value="12">12 panels · detailed walkthrough</option>
+          <option value="4">4 panels · quick overview</option>
+        </select>
+      </div>
       <details className="side-byok" aria-labelledby="side-image-title">
         <summary>
           <strong>API key / BYOK</strong>
@@ -705,9 +742,9 @@ function SidePanelShell() {
         </summary>
         <h2 id="side-image-title">Bring your own image AI</h2>
         <p>
-          Use OpenAI or Google Gemini to generate four illustrations with your
-          own key. Captions and evidence stay unchanged. No key uses free
-          bundled artwork.
+          Use OpenAI or Google Gemini to generate {activePanelCount}{' '}
+          illustrations with your own key. Captions and evidence stay unchanged.
+          No key uses free bundled artwork.
         </p>
         {sampleMode ? (
           <p role="status">
@@ -771,8 +808,8 @@ function SidePanelShell() {
         <small>
           The key stays in this panel until it closes or you clear it. It passes
           through Comic Code for generation and is never saved. Only
-          illustration prompts go to the selected provider. Four images use your
-          provider’s quota and billing.
+          illustration prompts go to the selected provider. {activePanelCount}{' '}
+          images use your provider’s quota and billing.
         </small>
         <a
           href={imageProviders[imageProvider].keyUrl}
@@ -790,7 +827,9 @@ function SidePanelShell() {
             onClick={() => void generateWithImageProvider(explanation)}
             disabled={!imageReady || artworkBusy || busy}
           >
-            {artworkBusy ? 'Generating 4 AI panels…' : 'Generate 4 AI panels'}
+            {artworkBusy
+              ? `Generating ${activePanelCount} AI panels…`
+              : `Generate ${activePanelCount} AI panels`}
           </button>
         ) : (
           <p className="side-byok__status" role="status">
@@ -958,7 +997,7 @@ function SidePanelShell() {
                   <strong>
                     {aiGenerationRequested &&
                     !hasByokArtwork(explanation.analysis?.artworkProvider)
-                      ? 'Generating 4 AI panels…'
+                      ? `Generating ${activePanelCount} AI panels…`
                       : explanation.progress.message}
                   </strong>
                 </div>
@@ -1008,17 +1047,21 @@ function SidePanelShell() {
                 : ''}
             </p>
           ) : null}
+          <ManualArtwork
+            key={`${explanation.id}:${explanation.analysis.panels.length}`}
+            analysis={explanation.analysis}
+          />
           {explanation.artifactUrl ? (
             <img
               src={explanation.artifactUrl}
-              alt="Generated four-panel repository comic"
+              alt={`Generated ${explanation.analysis.panels.length}-panel repository comic`}
               referrerPolicy="no-referrer"
             />
           ) : null}
           {explanation.analysis.panels.map((panel) => (
             <article className="side-story" key={panel.sequence}>
               <header>
-                <span>0{panel.sequence}</span>
+                <span>{String(panel.sequence).padStart(2, '0')}</span>
                 <small>{panel.purpose}</small>
               </header>
               <h2>{panel.title}</h2>

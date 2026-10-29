@@ -21,7 +21,8 @@
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "sharp": "0.35.5",
-    "zod": "4.6.7"
+    "zod": "4.6.7",
+    "@comic-code/ui": "workspace:*"
   },
   "optionalDependencies": {
     "@img/sharp-libvips-linux-x64": "1.3.4",

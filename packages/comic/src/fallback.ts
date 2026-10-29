@@ -6,7 +6,7 @@ import {
 
 import type { AnalysisEvidence, AnalysisInput } from './types'
 
-const fallbackAnalysisModel = 'deterministic-source-scan-v5'
+const fallbackAnalysisModel = 'deterministic-source-scan-v6'
 const fallbackImageModel = 'storyboard-fallback-v1'
 
 export const deterministicFallbackModels = {
@@ -339,6 +339,156 @@ export function createDeterministicComicAnalysis(
     ? `This code ${codeFeatureSummary}. Local scanning mapped ${scopeSummary} without guessing its business purpose.`
     : 'No executable source evidence was available for this structural preview.'
 
+  if (input.panelCount === 12) {
+    const chapters = [
+      {
+        title: 'Start with the big picture',
+        features: [],
+        caption: structuralSummary,
+        scene:
+          'A wide workshop overview with incoming materials and a finished result.',
+      },
+      {
+        title: 'Find the building blocks',
+        features: [],
+        caption: `The sample covers ${paths.length} source files. File boundaries help organize the work; this scan does not trace every dependency.`,
+        scene: 'Separate workshop rooms arranged around one shared task.',
+      },
+      {
+        title: 'See how parts connect',
+        features: ['module dependencies'],
+        caption:
+          'Import or export patterns connect building blocks in the sampled code.',
+        scene:
+          'Different workshop stations connected by clearly marked paths without writing.',
+      },
+      {
+        title: 'Understand the work',
+        features: ['function and method logic', 'data shapes and classes'],
+        caption:
+          'Function or data-definition patterns organize work into named jobs and known information shapes.',
+        scene:
+          'Workers receive a job and arrange its materials into familiar containers.',
+      },
+      {
+        title: 'Check incoming information',
+        features: ['input validation'],
+        caption:
+          'Validation-related patterns appear in the sample. The exact accepted values require reading the cited implementation.',
+        scene:
+          'A receiving desk examines incoming parcels before letting them continue.',
+      },
+      {
+        title: 'Follow each decision',
+        features: ['branching decisions'],
+        caption:
+          'Conditional patterns choose between paths. The result depends on the values supplied when the code runs.',
+        scene:
+          'One parcel approaches a fork with two clearly different routes.',
+      },
+      {
+        title: 'Trace user-facing changes',
+        features: ['interface state and events'],
+        caption:
+          'Interface or event patterns respond to actions and update state. This scan does not verify the rendered screen.',
+        scene:
+          'A person presses a plain control while a nearby display changes its arrangement.',
+      },
+      {
+        title: 'Follow outside requests',
+        features: ['network requests'],
+        caption:
+          'Network-related patterns appear in the sampled code. Availability and actual server responses are not tested here.',
+        scene:
+          'A messenger leaves the workshop for a separate building and returns with a parcel.',
+      },
+      {
+        title: 'See where information goes',
+        features: ['database operations'],
+        caption:
+          'Storage or query-related patterns appear in the sample. Persistence and data rules still need runtime verification.',
+        scene: 'A record passes from a workbench into an organized archive.',
+      },
+      {
+        title: 'Understand waiting work',
+        features: ['asynchronous operations', 'iteration'],
+        caption:
+          'Asynchronous or iteration patterns handle waiting work or groups of items. Runtime timing is not measured by this scan.',
+        scene:
+          'Several parcels move through a queue while another station keeps working.',
+      },
+      {
+        title: 'Look at failure paths',
+        features: ['error handling', 'access and security checks'],
+        caption:
+          'Error-handling or access-check patterns appear in the sample. Their presence alone does not prove every failure is handled safely.',
+        scene:
+          'A guarded checkpoint diverts a damaged parcel to a separate inspection desk.',
+      },
+      {
+        title: 'Verify the final result',
+        features: ['automated tests'],
+        caption:
+          'Test or assertion patterns appear in the sample. Running them and checking the real product is the next step.',
+        scene:
+          'A reviewer compares a finished parcel with a checklist and leaves uncertain items for inspection.',
+      },
+    ]
+    const detailedClaims = chapters.map((chapter, index) => {
+      const present =
+        chapter.features.length === 0 ||
+        chapter.features.some((feature) =>
+          codeProfile.features.includes(feature),
+        )
+      return {
+        id: `detail-claim-${index + 1}`,
+        text: present
+          ? chapter.caption
+          : `No ${chapter.features.join(' or ')} pattern was recognized in the sampled files. This does not establish whether it exists elsewhere in the project.`,
+        support: 'direct' as const,
+        confidence: present ? ('medium' as const) : ('low' as const),
+        evidenceIds: codeProfile.evidenceFor(chapter.features, supportingIds),
+      }
+    })
+    return comicAnalysisSchema.parse({
+      generationMode: 'deterministic_fallback',
+      plainLanguageSummary: structuralSummary,
+      metaphor:
+        'A workshop with connected rooms, decisions, deliveries, records and inspections.',
+      sharedVisualStyle:
+        'Light ivory editorial illustrations with chartreuse, pale pink, cool blue and peach, dark green linework and one consistent workshop setting.',
+      panels: chapters.map((chapter, index) => ({
+        sequence: index + 1,
+        purpose:
+          index === 0
+            ? 'overview'
+            : index < 4
+              ? 'components'
+              : index < 11
+                ? 'flow'
+                : 'outcome',
+        title: chapter.title,
+        caption: detailedClaims[index]!.text,
+        scenePrompt:
+          detailedClaims[index]!.confidence === 'low'
+            ? 'An unfilled workshop station beside a careful reviewer, representing a question the available sample cannot answer.'
+            : chapter.scene,
+        claimIds: [detailedClaims[index]!.id],
+        confidence: detailedClaims[index]!.confidence,
+        uncertaintyNote:
+          detailedClaims[index]!.confidence === 'low'
+            ? 'Not detected in this bounded sample. Review the complete project before drawing conclusions.'
+            : null,
+      })),
+      claims: detailedClaims,
+      uncertainties: [
+        'This is a bounded structural scan. Runtime behavior, business intent and missing features require manual verification.',
+      ],
+      evidence: input.evidence.map(({ locator }) => locator),
+      excludedFiles: input.excludedFiles.slice(0, maxPersistedExcludedFiles),
+    })
+  }
+
   return comicAnalysisSchema.parse({
     generationMode: 'deterministic_fallback',
     plainLanguageSummary: `${structuralSummary} Comic Code used its API-free local mode and did not send this explanation to the OpenAI API.`,
@@ -392,7 +542,7 @@ export function createDeterministicComicAnalysis(
         claimIds: ['fallback-claim-4'],
         confidence: 'medium',
         uncertaintyNote:
-          'Local mode maps code structure. Add a Workers AI key for semantic analysis and unique artwork.',
+          'Local mode maps code structure. Use your own artwork or an optional image API key to change the illustrations.',
       },
     ],
     claims,

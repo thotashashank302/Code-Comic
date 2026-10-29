@@ -67,11 +67,17 @@ async function assertSecurity(db: PGlite) {
          unnest(array['explanations', 'shares', 'usage_events', 'audit_events']) name
   `)
   expect(grants.rows.every((row) => !row.allowed)).toBe(true)
-  const bucket = await db.query<{ public: boolean }>(
-    'select public from storage.buckets where id = $1',
+  const bucket = await db.query<{
+    public: boolean
+    file_size_limit: number
+    allowed_mime_types: string[]
+  }>(
+    'select public, file_size_limit, allowed_mime_types from storage.buckets where id = $1',
     ['comic-artifacts'],
   )
   expect(bucket.rows[0]?.public).toBe(false)
+  expect(Number(bucket.rows[0]?.file_size_limit)).toBe(33554432)
+  expect(bucket.rows[0]?.allowed_mime_types).toEqual(['image/png'])
 }
 
 describe('repository mode SQL migrations', () => {

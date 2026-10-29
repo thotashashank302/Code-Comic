@@ -1,6 +1,7 @@
 import Image from 'next/image'
 
 import type { ComicAnalysis } from '@comic-code/contracts'
+import { comicDimensions } from '@comic-code/contracts/comic-layout'
 import { hasByokArtwork } from '@comic-code/contracts/image-providers'
 
 type StoryboardProps = {
@@ -14,6 +15,7 @@ export function Storyboard({
   artifactUrl,
   sample = false,
 }: StoryboardProps) {
+  const dimensions = comicDimensions(analysis.panels.length)
   const isFallback = analysis.generationMode === 'deterministic_fallback'
   const hasUserArtwork = hasByokArtwork(analysis.artworkProvider)
 
@@ -60,9 +62,9 @@ export function Storyboard({
         <div className="comic-preview">
           <Image
             src={artifactUrl}
-            alt="Four-panel Comic Code explanation"
-            width={1600}
-            height={1200}
+            alt={`${analysis.panels.length}-panel Comic Code explanation`}
+            width={dimensions.width}
+            height={dimensions.height}
             unoptimized
             referrerPolicy="no-referrer"
             priority
@@ -74,7 +76,9 @@ export function Storyboard({
         {analysis.panels.map((panel) => (
           <article className="story-panel" key={panel.sequence}>
             <header>
-              <span className="panel-number">0{panel.sequence}</span>
+              <span className="panel-number">
+                {String(panel.sequence).padStart(2, '0')}
+              </span>
               <span className="panel-purpose">{panel.purpose}</span>
             </header>
             <h3>{panel.title}</h3>
