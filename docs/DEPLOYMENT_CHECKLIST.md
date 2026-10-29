@@ -103,7 +103,10 @@ Do not publish the extension ZIP or submit Devpost until every command and the l
 
 ## Merge-readiness verification (2026-09-30)
 
-- CI runs tests, lint, formatting, web build, typecheck, extension packaging, and the production dependency audit on every PR update.
+- `.github/workflows/ci.yaml` runs tests, lint, formatting, web build, typecheck,
+  extension packaging, and the production dependency audit on PR creation,
+  updates, reopening and marking ready for review, plus pushes to `main`.
+  Draft PRs are checked; manual dispatch becomes available on the default branch.
 - Local PostgreSQL tests execute the migration SQL verbatim on a fresh schema and on a schema containing a legacy PR row. They verify row conversion, forced RLS, revoked API-role grants, private bucket metadata, file/SHA/JSON constraints, and the new shares index. Supabase roles and the storage bucket catalog are supplied as fixtures; these tests do not verify a hosted Supabase project or Storage API.
 - Apply and verify migrations before deploying the matching worker and web code. Previously built extension ZIPs use the retired request contract and must be rebuilt.
 - Keep the PR draft until a matching Trigger worker and hosted public/private generation, BYOK, download, share/revoke, and deletion pass. Then request independent review and merge only after approval and green CI.

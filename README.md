@@ -155,6 +155,13 @@ restricted build environments. To run the built web app locally:
 pnpm --filter @comic-code/web start --hostname 127.0.0.1
 ```
 
+GitHub Actions uses [`.github/workflows/ci.yaml`](.github/workflows/ci.yaml).
+It checks PRs when opened, updated, reopened or marked ready for review, as well
+as pushes to `main`. A manual trigger is available once the workflow is on the
+default branch. Draft PRs run checks too. The job runs `pnpm check`, extension
+packaging and the production dependency audit; it needs no AI keys or hosted
+service credentials. CI reports results on the PR and does not merge it.
+
 See [the debugging report](docs/DEBUGGING_REPORT.md) for reproduced defects,
 fixes, test results and the limits of hosted verification.
 

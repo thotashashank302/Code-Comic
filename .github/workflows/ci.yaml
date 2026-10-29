@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Tests, builds, and dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      WXT_PUBLIC_API_BASE_URL: https://comic-code-ci.example
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.11.0
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run tests, lint, formatting, production builds and typechecks
+        run: pnpm check
+      - name: Package Chrome extension
+        run: pnpm extension:zip
+      - name: Audit production dependencies
+        run: pnpm audit --prod
