@@ -1,5 +1,7 @@
 import { App } from '@octokit/app'
-import { Octokit } from '@octokit/rest'
+import { Octokit as RestOctokit } from '@octokit/rest'
+
+import { githubFetch } from './transport'
 
 import { maskSecrets } from './secrets'
 import type {
@@ -8,6 +10,8 @@ import type {
   RepositorySnapshot,
   RepositoryTreeFile,
 } from './types'
+
+const Octokit = RestOctokit.defaults({ request: { fetch: githubFetch } })
 
 export type GitHubAppConfig = {
   appId: string
@@ -47,7 +51,7 @@ async function readPublicSource(
     snapshot.commitSha,
     ...file.path.split('/'),
   ]
-  const response = await fetch(
+  const response = await githubFetch(
     `https://raw.githubusercontent.com/${segments.map(encodeURIComponent).join('/')}`,
     {
       signal: AbortSignal.timeout(20_000),
@@ -86,7 +90,7 @@ export class GitHubAppClient {
     const privateKey = Buffer.from(config.privateKeyBase64, 'base64').toString(
       'utf8',
     )
-    this.#app = new App({ appId: config.appId, privateKey })
+    this.#app = new App({ appId: config.appId, privateKey, Octokit })
   }
 
   async getRepositoryOctokit(
@@ -99,7 +103,6 @@ export class GitHubAppClient {
       if (!allowPublicFallback) throw new Error('GitHub App is not configured')
       return new Octokit({
         ...(fallbackAccessToken ? { auth: fallbackAccessToken } : {}),
-        request: { timeout: 20_000 },
       })
     }
     try {

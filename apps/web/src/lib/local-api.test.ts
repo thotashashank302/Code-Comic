@@ -189,6 +189,55 @@ describe('free local flow', () => {
     ).toBe(404)
   })
 
+  it.each([500, 502, 503, 504])(
+    'reports GitHub status %i as an upstream outage rather than a disk failure',
+    async (status) => {
+      vi.mocked(
+        GitHubAppClient.prototype.getRepositorySnapshot,
+      ).mockRejectedValue(
+        Object.assign(new Error('upstream details must stay private'), {
+          status,
+        }),
+      )
+      const response = await handleLocalApi(
+        request('/v1/github/repository?url=https://github.com/owner/example'),
+      )
+      expect(response.status).toBe(503)
+      expect(await response.json()).toEqual({ error: 'github_unavailable' })
+    },
+  )
+
+  it.each([
+    new TypeError('fetch failed'),
+    new TypeError('terminated'),
+    new DOMException('Request timed out', 'TimeoutError'),
+  ])(
+    'reports source transport failure $name as a GitHub outage',
+    async (failure) => {
+      vi.mocked(prepareRepository).mockRejectedValue(failure)
+      const response = await handleLocalApi(
+        request('/v1/explanations', 'POST', input),
+      )
+      expect(response.status).toBe(503)
+      expect(await response.json()).toEqual({ error: 'github_unavailable' })
+      expect(await new LocalStore(directory).list()).toEqual([])
+    },
+  )
+
+  it.each(['EACCES', 'EPERM', 'EROFS', 'ENOSPC'])(
+    'reports storage failure %s without exposing paths or confusing it with GitHub',
+    async (code) => {
+      vi.spyOn(LocalStore.prototype, 'list').mockRejectedValue(
+        Object.assign(new Error('/private/path must stay private'), { code }),
+      )
+      const response = await handleLocalApi(request('/v1/explanations'))
+      expect(response.status).toBe(507)
+      expect(await response.json()).toEqual({
+        error: 'local_storage_unavailable',
+      })
+    },
+  )
+
   it.each(['openai', 'gemini'] as const)(
     'illustrates a saved comic with %s without another GitHub scan or changing its evidence',
     async (provider) => {

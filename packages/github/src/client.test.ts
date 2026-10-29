@@ -136,11 +136,12 @@ describe('public repository failure handling', () => {
   })
 })
 
-it('reads anonymous public source at an immutable raw URL without consuming a contents API request', async () => {
+it('recovers an anonymous source read at an immutable raw URL without a contents API request', async () => {
   const client = new GitHubAppClient()
   const fetch = vi
     .fn()
-    .mockResolvedValue(new Response('export const password = "example"'))
+    .mockRejectedValueOnce(new TypeError('fetch failed'))
+    .mockResolvedValueOnce(new Response('export const password = "example"'))
   vi.stubGlobal('fetch', fetch)
   try {
     const files = await client.readRepositoryFiles({
@@ -161,6 +162,7 @@ it('reads anonymous public source at an immutable raw URL without consuming a co
     expect(fetch.mock.calls[0]?.[0]).toBe(
       `https://raw.githubusercontent.com/owner/repo/${commit.sha}/src/file%20name.ts`,
     )
+    expect(fetch).toHaveBeenCalledTimes(2)
     expect(files).toHaveLength(1)
   } finally {
     vi.unstubAllGlobals()

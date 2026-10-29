@@ -72,8 +72,12 @@ function friendlyError(code: string) {
     local_storage_full:
       'You have 100 saved comics. Delete an older comic before creating another.',
     comic_not_found: 'This comic expired or was deleted. Generate it again.',
+    github_unavailable:
+      'Comic Code could not reach GitHub after retrying. Try Inspect again when the connection recovers. Saved comics and samples still work.',
+    local_storage_unavailable:
+      'Comic Code cannot write to its data directory. Check free disk space and permissions, or set COMIC_CODE_DATA_DIR to a writable folder and restart.',
     local_request_failed:
-      'The local request failed. Check your internet connection and that the comic data directory is writable, then retry.',
+      'Comic Code could not complete this local operation. Retry, or check the server log if it keeps failing.',
 
     authentication_required: 'Connect GitHub to continue.',
     invalid_repository_url: 'Paste a full GitHub repository URL.',

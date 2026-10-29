@@ -296,6 +296,14 @@ export async function handleLocalApi(request: Request) {
       return json({ error: 'github_rate_limited' }, 429)
     if (status === 404) return json({ error: 'repository_not_found' }, 404)
     if (
+      (status && status >= 500 && status <= 599) ||
+      (error instanceof Error &&
+        (['AbortError', 'TimeoutError'].includes(error.name) ||
+          (error instanceof TypeError &&
+            ['fetch failed', 'terminated'].includes(error.message))))
+    )
+      return json({ error: 'github_unavailable' }, 503)
+    if (
       error instanceof Error &&
       error.message === 'repository_tree_truncated'
     ) {
@@ -311,6 +319,8 @@ export async function handleLocalApi(request: Request) {
       error && typeof error === 'object' && 'code' in error
         ? String(error.code)
         : ''
+    if (['EACCES', 'EPERM', 'EROFS', 'ENOSPC'].includes(code))
+      return json({ error: 'local_storage_unavailable' }, 507)
     if (
       [
         'image_provider_auth_failed',
