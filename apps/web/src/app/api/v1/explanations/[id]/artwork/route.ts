@@ -92,6 +92,7 @@ export async function POST(request: Request, context: RouteContext) {
         excludedFiles: analysis.excludedFiles,
         selectedFiles: row.selected_files,
         artifactPath,
+        expectedArtifactPath: row.final_artifact_path,
         progressMessage:
           'Comic ready · illustrated with your own image API key',
       })
@@ -112,7 +113,7 @@ export async function POST(request: Request, context: RouteContext) {
       metadata: {
         provider: parsed.data.provider,
         model: parsed.data.model,
-        imageCount: 4,
+        imageCount: analysis.panels.length,
       },
     }).catch(() => undefined)
 
@@ -126,6 +127,8 @@ export async function POST(request: Request, context: RouteContext) {
       typeof error.code === 'string'
         ? error.code
         : undefined
+    if (providerCode === 'artwork_conflict')
+      return routeErrorResponse(new HttpError(409, 'artwork_conflict'))
     if (
       providerCode === 'image_provider_auth_failed' ||
       providerCode === 'image_provider_quota_reached' ||

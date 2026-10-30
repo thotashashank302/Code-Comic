@@ -23,15 +23,3 @@ export type GeneratedPanelArtwork = {
   sequence: number
   png: Buffer
 }
-
-export type GeneratedComic = {
-  analysis: ComicAnalysis
-  panels: GeneratedPanelArtwork[]
-  png: Buffer
-  usage: {
-    analysisInputTokens: number
-    analysisOutputTokens: number
-    verificationInputTokens: number
-    verificationOutputTokens: number
-  }
-}

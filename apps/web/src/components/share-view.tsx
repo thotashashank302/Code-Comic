@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 
 import type { ComicAnalysis } from '@comic-code/contracts'
@@ -24,9 +24,13 @@ export function ShareView({ shareId }: ShareViewProps) {
     'loading',
   )
 
+  const capability = useRef<{ id: string; token: string | null } | null>(null)
+
   useEffect(() => {
     const fragment = new URLSearchParams(window.location.hash.slice(1))
-    const token = fragment.get('token')
+    if (capability.current?.id !== shareId)
+      capability.current = { id: shareId, token: fragment.get('token') }
+    const token = capability.current.token
     window.history.replaceState(null, '', window.location.pathname)
     if (!token) {
       const invalidTimer = window.setTimeout(() => setStatus('invalid'), 0)
@@ -34,26 +38,35 @@ export function ShareView({ shareId }: ShareViewProps) {
     }
 
     const controller = new AbortController()
-    fetch(`/api/v1/shares/${shareId}/exchange`, {
-      method: 'POST',
-      cache: 'no-store',
-      signal: controller.signal,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error('invalid')
-        return (await response.json()) as { explanation: SharedExplanation }
+    const refresh = () => {
+      void fetch(`/api/v1/shares/${shareId}/exchange`, {
+        method: 'POST',
+        cache: 'no-store',
+        signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
       })
-      .then((result) => {
-        setExplanation(result.explanation)
-        setStatus('ready')
-      })
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === 'AbortError') return
-        setStatus('invalid')
-      })
-    return () => controller.abort()
+        .then(async (response) => {
+          if (!response.ok) throw new Error('invalid')
+          return (await response.json()) as { explanation: SharedExplanation }
+        })
+        .then((result) => {
+          if (!controller.signal.aborted) {
+            setExplanation(result.explanation)
+            setStatus('ready')
+          }
+        })
+        .catch(() => {
+          if (controller.signal.aborted) return
+          setStatus('invalid')
+        })
+    }
+    void refresh()
+    const interval = window.setInterval(refresh, 4 * 60 * 1000)
+    return () => {
+      controller.abort()
+      window.clearInterval(interval)
+    }
   }, [shareId])
 
   return (

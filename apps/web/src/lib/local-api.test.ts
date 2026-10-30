@@ -1,4 +1,11 @@
-import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
+import {
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -168,6 +175,36 @@ describe('free local flow', () => {
     ).toBe(404)
   })
 
+  it('isolates a corrupt record without deleting it or blocking healthy comics', async () => {
+    const healthy = await (
+      await handleLocalApi(request('/v1/explanations', 'POST', input))
+    ).json()
+    const badId = '11111111-1111-4111-8111-111111111111'
+    const filename = path.join(directory, `${badId}.json`)
+    await writeFile(filename, '{broken JSON', { mode: 0o600 })
+    const listed = await handleLocalApi(request('/v1/explanations'))
+    expect(listed.status).toBe(200)
+    expect((await listed.json()).explanations).toHaveLength(1)
+    expect((await new LocalStore(directory).list())[0]).not.toHaveProperty(
+      'png',
+      expect.any(String),
+    )
+    expect(
+      (await new LocalStore(directory).get(healthy.explanation.id))?.png,
+    ).toBeTruthy()
+    expect(await readFile(filename, 'utf8')).toBe('{broken JSON')
+    expect(
+      (
+        await handleLocalApi(
+          request(`/v1/explanations/${healthy.explanation.id}`),
+        )
+      ).status,
+    ).toBe(200)
+    const invalid = await handleLocalApi(request(`/v1/explanations/${badId}`))
+    expect(invalid.status).toBe(422)
+    expect(await invalid.json()).toEqual({ error: 'local_comic_corrupt' })
+  })
+
   it('rejects private repositories, malformed generation and path traversal', async () => {
     vi.mocked(
       GitHubAppClient.prototype.getRepositorySnapshot,
@@ -284,6 +321,14 @@ describe('free local flow', () => {
         }),
       )
       expect(response.status).toBe(200)
+      const updated = await response.json()
+      expect(updated.explanation.artifactUrl).not.toBe(explanation.artifactUrl)
+      const refreshed = await (
+        await handleLocalApi(request(`/v1/explanations/${explanation.id}`))
+      ).json()
+      expect(refreshed.explanation.artifactUrl).toBe(
+        updated.explanation.artifactUrl,
+      )
       expect(prepareRepository).toHaveBeenCalledTimes(1)
       expect(upstream).toHaveBeenCalledTimes(4)
       const persisted = await new LocalStore(directory).get(explanation.id)

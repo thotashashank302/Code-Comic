@@ -72,6 +72,12 @@ function friendlyError(code: string) {
     local_storage_full:
       'You have 100 saved comics. Delete an older comic before creating another.',
     comic_not_found: 'This comic expired or was deleted. Generate it again.',
+    local_comic_corrupt:
+      'This saved comic file is damaged. Other comics are still available. Inspect its repository to generate a replacement.',
+    artwork_conflict:
+      'This comic changed in another tab. Reload it before replacing its artwork again.',
+    explanation_not_found:
+      'This comic expired, was deleted, or is not available to your account.',
     github_unavailable:
       'Comic Code could not reach GitHub after retrying. Try Inspect again when the connection recovers. Saved comics and samples still work.',
     local_storage_unavailable:
@@ -87,6 +93,8 @@ function friendlyError(code: string) {
       'Daily safety limit is 25 comics. Try again after 24 hours.',
     no_executable_code:
       'This repository has no safe, readable source files to explain.',
+    extension_not_allowed:
+      'This extension is not approved by the hosted server. Configure ALLOWED_EXTENSION_IDS with its Chrome extension ID.',
     github_reconnect_required:
       'Your GitHub login expired. Reconnect GitHub, then try again.',
     github_access_denied:
@@ -180,15 +188,30 @@ export function ComicCodeApp() {
         setUser(result.user)
         setLocalMode(result.mode === 'local')
         if (result.mode === 'local') {
-          const saved = await api<{ explanations: Explanation[] }>(
-            '/api/v1/explanations',
-            { signal: controller.signal },
-          )
-          setRecent(saved.explanations)
+          try {
+            const saved = await api<{ explanations: Explanation[] }>(
+              '/api/v1/explanations',
+              { signal: controller.signal },
+            )
+            if (!controller.signal.aborted) setRecent(saved.explanations)
+          } catch (caught) {
+            if (!controller.signal.aborted)
+              setError(
+                friendlyError(
+                  caught instanceof Error
+                    ? caught.message
+                    : 'local_request_failed',
+                ),
+              )
+          }
         }
       })
-      .catch(() => setUser(null))
-      .finally(() => setAuthChecked(true))
+      .catch(() => {
+        if (!controller.signal.aborted) setUser(null)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setAuthChecked(true)
+      })
     return () => controller.abort()
   }, [])
 
@@ -220,6 +243,39 @@ export function ComicCodeApp() {
       window.clearInterval(interval)
     }
   }, [activeExplanationId, activeStatus])
+
+  useEffect(() => {
+    if (
+      localMode ||
+      sampleMode ||
+      !activeExplanationId ||
+      activeStatus !== 'completed' ||
+      !explanation?.artifactUrl
+    )
+      return
+    let active = true
+    const refresh = async () => {
+      try {
+        const result = await api<{ explanation: Explanation }>(
+          `/api/v1/explanations/${activeExplanationId}`,
+        )
+        if (active) setExplanation(result.explanation)
+      } catch {
+        /* Preserve the current story during a temporary connection failure. */
+      }
+    }
+    const interval = window.setInterval(refresh, 4 * 60 * 1000)
+    return () => {
+      active = false
+      window.clearInterval(interval)
+    }
+  }, [
+    activeExplanationId,
+    activeStatus,
+    explanation?.artifactUrl,
+    localMode,
+    sampleMode,
+  ])
 
   const inspectRepository = async () => {
     setSampleMode(false)
@@ -684,12 +740,21 @@ export function ComicCodeApp() {
                 }
                 setError(null)
                 setSampleMode(false)
+                setRepository(null)
+                setExplanation(null)
+                pendingImage.current = false
+                setAiGenerationRequested(false)
+                setArtworkNotice(null)
+                setShareNotice(null)
                 setBusy(true)
                 try {
                   const result = await api<{ explanation: Explanation }>(
                     `/api/v1/explanations/${id}`,
                   )
                   setExplanation(result.explanation)
+                  setRepositoryUrl(
+                    `https://github.com/${result.explanation.repository}/tree/${result.explanation.ref.split('/').map(encodeURIComponent).join('/')}`,
+                  )
                 } catch (caught) {
                   setError(
                     friendlyError(
@@ -710,6 +775,10 @@ export function ComicCodeApp() {
                 </option>
               ))}
             </select>
+            <small>
+              To regenerate a saved comic, inspect its repository again using
+              the URL above.
+            </small>
           </div>
         ) : null}
 

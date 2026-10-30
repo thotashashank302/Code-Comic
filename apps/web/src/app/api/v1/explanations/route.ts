@@ -109,6 +109,7 @@ export async function POST(request: Request) {
     )
     if (
       existing &&
+      Date.parse(existing.expires_at) > Date.now() &&
       existing.status !== 'failed' &&
       existing.status !== 'canceled'
     ) {

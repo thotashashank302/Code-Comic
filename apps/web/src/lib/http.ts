@@ -1,3 +1,4 @@
+import { ZodError } from 'zod'
 import { getServerEnv } from '@/lib/env'
 import { UnauthorizedError } from '@/lib/auth/session'
 
@@ -9,18 +10,29 @@ export function jsonNoStore(body: unknown, init: ResponseInit = {}) {
 }
 
 export function safeReturnTo(value: string | null) {
-  if (!value || !value.startsWith('/') || value.startsWith('//')) return '/'
+  if (
+    !value ||
+    !value.startsWith('/') ||
+    value.startsWith('//') ||
+    /[\\\u0000-\u0020\u007f]/.test(value)
+  )
+    return '/'
   return value.slice(0, 1_024)
 }
 
-export function safeExtensionRedirect(value: string | null) {
+export function safeExtensionRedirect(
+  value: string | null,
+  allowedIds: readonly string[] = [],
+) {
   if (!value) return undefined
   try {
     const url = new URL(value)
     if (
       url.protocol !== 'https:' ||
       !/^[a-p]{32}\.chromiumapp\.org$/.test(url.hostname) ||
-      url.pathname !== '/comic-code'
+      url.pathname !== '/comic-code' ||
+      Boolean(url.username || url.password || url.port) ||
+      !allowedIds.includes(url.hostname.split('.')[0]!)
     ) {
       return undefined
     }
@@ -39,7 +51,7 @@ export function assertSameOrigin(request: Request) {
     !origin ||
     origin !== new URL(getServerEnv().NEXT_PUBLIC_APP_URL).origin
   ) {
-    throw new Error('Invalid request origin')
+    throw new HttpError(403, 'invalid_request_origin')
   }
 }
 
@@ -53,6 +65,15 @@ export function routeErrorResponse(error: unknown) {
   if (error instanceof UnauthorizedError) {
     return jsonNoStore({ error: 'authentication_required' }, { status: 401 })
   }
+  if (error instanceof ZodError)
+    return jsonNoStore({ error: 'invalid_request' }, { status: 400 })
+  if (
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    error.code === 'explanation_not_found'
+  )
+    return jsonNoStore({ error: 'explanation_not_found' }, { status: 404 })
   if (error instanceof SyntaxError) {
     return jsonNoStore({ error: 'invalid_json' }, { status: 400 })
   }

@@ -165,6 +165,7 @@ async function generate(request: Request) {
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
       png: png.toString('base64'),
+      artifactVersion: randomUUID(),
     }
     await store.save(record)
     return json({ explanation: publicLocalComic(record) }, 201)
@@ -188,12 +189,14 @@ async function illustrate(request: Request, id: string) {
     const artwork = await generateByokPanelArtwork(parsed.data, analysis)
     const png = await composeComic(analysis, artwork)
     // Replace the complete record atomically; failures preserve the free comic.
-    await localStore().save({
+    const updated = {
       ...record,
       analysis,
       png: png.toString('base64'),
-    })
-    return json({ explanation: publicLocalComic({ ...record, analysis }) })
+      artifactVersion: randomUUID(),
+    }
+    await localStore().save(updated)
+    return json({ explanation: publicLocalComic(updated) })
   })
 }
 
@@ -319,6 +322,7 @@ export async function handleLocalApi(request: Request) {
       error && typeof error === 'object' && 'code' in error
         ? String(error.code)
         : ''
+    if (code === 'local_comic_corrupt') return json({ error: code }, 422)
     if (['EACCES', 'EPERM', 'EROFS', 'ENOSPC'].includes(code))
       return json({ error: 'local_storage_unavailable' }, 507)
     if (

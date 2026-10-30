@@ -1,5 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { createRoot } from 'react-dom/client'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   hasByokArtwork,
   imageProviders,
@@ -129,6 +128,12 @@ function friendlyError(value: string) {
     local_storage_full:
       'You have 100 saved comics. Delete an older comic before creating another.',
     comic_not_found: 'This comic expired or was deleted. Generate it again.',
+    local_comic_corrupt:
+      'This saved comic file is damaged. Other comics are still available. Inspect its repository to generate a replacement.',
+    artwork_conflict:
+      'This comic changed in another tab. Reload it before replacing its artwork again.',
+    explanation_not_found:
+      'This comic expired, was deleted, or is not available to your account.',
     github_unavailable:
       'Comic Code could not reach GitHub after retrying. Try Inspect again when the connection recovers. Saved comics and samples still work.',
     local_storage_unavailable:
@@ -143,6 +148,8 @@ function friendlyError(value: string) {
     invalid_repository_url: 'Open a full GitHub repository URL.',
     no_executable_code:
       'This repository has no safe, readable source files to explain.',
+    extension_not_allowed:
+      'This extension is not approved by the hosted server. Configure ALLOWED_EXTENSION_IDS with its Chrome extension ID.',
     github_reconnect_required:
       'Your GitHub login expired. Reconnect GitHub, then try again.',
     github_access_denied:
@@ -226,7 +233,7 @@ function bundledSampleFor(count: PanelCount) {
   }
 }
 
-function SidePanelShell() {
+export function SidePanelShell() {
   const [sampleMode, setSampleMode] = useState(previewDocument)
   const [panelCount, setPanelCount] = useState<PanelCount>(12)
   const [coordinate, setCoordinate] = useState<Coordinate | null>(
@@ -258,6 +265,7 @@ function SidePanelShell() {
   const [artworkBusy, setArtworkBusy] = useState(false)
   const [aiGenerationRequested, setAiGenerationRequested] = useState(false)
   const pendingImage = useRef(false)
+  const viewVersion = useRef(0)
   const imageReady =
     imageApiKey.trim().length >= 20 &&
     imageApiKey.trim().length <= 2_048 &&
@@ -311,6 +319,12 @@ function SidePanelShell() {
       area: string,
     ) => {
       if (area === 'local' && changes.comicCodeCoordinate?.newValue) {
+        viewVersion.current += 1
+        pendingImage.current = false
+        setBusy(false)
+        setArtworkBusy(false)
+        setError(null)
+        setNotice(null)
         setCoordinate(changes.comicCodeCoordinate.newValue as Coordinate)
         setRepository(null)
         setExplanation(null)
@@ -442,15 +456,19 @@ function SidePanelShell() {
     ) {
       return
     }
+    let active = true
     const refreshArtifact = async () => {
       const result = await requestApi<{ explanation: Explanation }>(
         `/api/v1/explanations/${explanationId}`,
         session,
       ).catch(() => null)
-      if (result) setExplanation(result.explanation)
+      if (active && result) setExplanation(result.explanation)
     }
     const interval = window.setInterval(refreshArtifact, 4 * 60 * 1_000)
-    return () => window.clearInterval(interval)
+    return () => {
+      active = false
+      window.clearInterval(interval)
+    }
   }, [
     explanation?.artifactUrl,
     explanationId,
@@ -492,6 +510,7 @@ function SidePanelShell() {
       return
     }
     if (!session || !repository) return
+    const version = viewVersion.current
     setBusy(true)
     setError(null)
     setNotice(null)
@@ -513,10 +532,14 @@ function SidePanelShell() {
           }),
         },
       )
-      setExplanation(result.explanation)
       if (coordinate)
-        void persistExplanationId(coordinate, result.explanation.id)
+        void persistExplanationId(coordinate, result.explanation.id).catch(
+          () => undefined,
+        )
+      if (version !== viewVersion.current) return
+      setExplanation(result.explanation)
     } catch (caught) {
+      if (version !== viewVersion.current) return
       pendingImage.current = false
       setAiGenerationRequested(false)
       setError(
@@ -525,7 +548,7 @@ function SidePanelShell() {
         ),
       )
     } finally {
-      setBusy(false)
+      if (version === viewVersion.current) setBusy(false)
     }
   }
 
@@ -551,6 +574,7 @@ function SidePanelShell() {
   const generateWithImageProvider = useCallback(
     async (target: Explanation) => {
       if (sampleMode || !session || !target.analysis) return
+      const version = viewVersion.current
       setAiGenerationRequested(true)
       setArtworkBusy(true)
       setError(null)
@@ -568,20 +592,24 @@ function SidePanelShell() {
             }),
           },
         )
+        if (coordinate)
+          void persistExplanationId(coordinate, result.explanation.id).catch(
+            () => undefined,
+          )
+        if (version !== viewVersion.current) return
         setExplanation(result.explanation)
-        if (coordinate) {
-          void persistExplanationId(coordinate, result.explanation.id)
-        }
         setAiGenerationRequested(false)
         setActiveTab('story')
         setNotice(
           `${target.analysis.panels.length} AI panels ready. Captions and evidence are unchanged.`,
         )
       } catch (caught) {
+        if (version !== viewVersion.current) return
         const failed = await requestApi<{ explanation: Explanation }>(
           `/api/v1/explanations/${target.id}`,
           session,
         ).catch(() => null)
+        if (version !== viewVersion.current) return
         if (failed) {
           setExplanation(failed.explanation)
           setActiveTab(
@@ -599,8 +627,10 @@ function SidePanelShell() {
           ),
         )
       } finally {
-        setAiGenerationRequested(false)
-        setArtworkBusy(false)
+        if (version === viewVersion.current) {
+          setAiGenerationRequested(false)
+          setArtworkBusy(false)
+        }
       }
     },
     [imageProvider, imageModel, imageApiKey, coordinate, session, sampleMode],
@@ -633,6 +663,9 @@ function SidePanelShell() {
   }
 
   const logout = async () => {
+    viewVersion.current += 1
+    setBusy(false)
+    setArtworkBusy(false)
     await chrome.storage.local.remove('comicCodeSession')
     pendingImage.current = false
     setImageApiKey('')
@@ -643,6 +676,9 @@ function SidePanelShell() {
   }
 
   const loadSample = () => {
+    viewVersion.current += 1
+    setAiGenerationRequested(false)
+    setArtworkBusy(false)
     pendingImage.current = false
     setSampleMode(true)
     setLocalMode(true)
@@ -1151,15 +1187,3 @@ function SidePanelShell() {
     </main>
   )
 }
-
-const root = document.getElementById('root')
-
-if (!root) {
-  throw new Error('Missing Comic Code side-panel root')
-}
-
-createRoot(root).render(
-  <React.StrictMode>
-    <SidePanelShell />
-  </React.StrictMode>,
-)

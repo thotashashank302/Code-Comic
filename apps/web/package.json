@@ -15,14 +15,14 @@
     "@comic-code/contracts": "workspace:*",
     "@comic-code/database": "workspace:*",
     "@comic-code/github": "workspace:*",
+    "@comic-code/ui": "workspace:*",
     "@trigger.dev/sdk": "4.8.1",
     "jose": "6.2.3",
     "next": "16.4.3",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "sharp": "0.35.5",
-    "zod": "4.6.7",
-    "@comic-code/ui": "workspace:*"
+    "zod": "4.6.7"
   },
   "optionalDependencies": {
     "@img/sharp-libvips-linux-x64": "1.3.4",
@@ -30,15 +30,16 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.3",
+    "@trigger.dev/build": "4.8.1",
     "@types/node": "24.10.1",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
-    "@trigger.dev/build": "4.8.1",
     "eslint": "9.39.2",
     "eslint-config-next": "16.4.3",
-    "trigger.dev": "4.8.1",
+    "jsdom": "27.4.0",
     "tailwindcss": "4.3.3",
+    "trigger.dev": "4.8.1",
     "typescript": "5.9.3",
-    "vitest": "4.1.10"
+    "vitest": "4.1.12"
   }
 }

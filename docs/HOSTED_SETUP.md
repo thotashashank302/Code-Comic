@@ -89,6 +89,11 @@ Create a GitHub App with:
 
 Public repositories work without installing the app. Private repositories require the user to install the app on that repository and still revalidate the signed-in user’s access.
 
+For hosted extension login, copy the installed extension ID from
+`chrome://extensions` into the server's comma-separated `ALLOWED_EXTENSION_IDS`.
+Both OAuth start and callback reject unlisted recipients before issuing a
+session. Leave the list empty for web-only login. Local mode needs no OAuth.
+
 ## Supabase setup
 
 The migration was created with Supabase CLI 2.109.1 and enables RLS/forced RLS, explicit service-role grants, constraints, indexes, retention fields, and a private PNG bucket. Apply the later `20261029170443_support_twelve_panel_pngs.sql`

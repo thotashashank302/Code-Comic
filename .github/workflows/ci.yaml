@@ -38,5 +38,5 @@ jobs:
         run: pnpm check
       - name: Package Chrome extension
         run: pnpm extension:zip
-      - name: Audit production dependencies
-        run: pnpm audit --prod
+      - name: Audit runtime and development dependencies
+        run: pnpm audit

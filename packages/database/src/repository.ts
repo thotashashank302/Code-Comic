@@ -75,8 +75,13 @@ export async function getOwnedExplanation(
     .eq('id', explanationId)
     .eq('owner_user_id', userId)
     .is('deleted_at', null)
-    .single()
+    .gt('expires_at', new Date().toISOString())
+    .maybeSingle()
   throwIfError(error)
+  if (!data)
+    throw Object.assign(new Error('explanation_not_found'), {
+      code: 'explanation_not_found',
+    })
   return data as ExplanationRow
 }
 
@@ -105,8 +110,13 @@ export async function getExplanationForWorker(
     .select('*')
     .eq('id', explanationId)
     .is('deleted_at', null)
-    .single()
+    .gt('expires_at', new Date().toISOString())
+    .maybeSingle()
   throwIfError(error)
+  if (!data)
+    throw Object.assign(new Error('explanation_not_found'), {
+      code: 'explanation_not_found',
+    })
   return data as ExplanationRow
 }
 
@@ -190,10 +200,11 @@ export async function completeExplanation(
     excludedFiles: string[]
     selectedFiles: string[]
     artifactPath: string
+    expectedArtifactPath?: string | null
     progressMessage?: string
   },
 ) {
-  const { data, error } = await client
+  let query = client
     .from('explanations')
     .update({
       analysis: input.analysis,
@@ -209,10 +220,21 @@ export async function completeExplanation(
     })
     .eq('id', input.explanationId)
     .is('deleted_at', null)
-    .select('id')
-    .maybeSingle()
+  if (input.expectedArtifactPath !== undefined) {
+    query =
+      input.expectedArtifactPath === null
+        ? query.is('final_artifact_path', null)
+        : query.eq('final_artifact_path', input.expectedArtifactPath)
+  }
+  const { data, error } = await query.select('id').maybeSingle()
   throwIfError(error)
-  if (!data) throw new Error('Explanation was deleted before completion')
+  if (!data) {
+    if (input.expectedArtifactPath !== undefined)
+      throw Object.assign(new Error('artwork_conflict'), {
+        code: 'artwork_conflict',
+      })
+    throw new Error('Explanation was deleted before completion')
+  }
 }
 
 export async function saveExplanationAnalysis(

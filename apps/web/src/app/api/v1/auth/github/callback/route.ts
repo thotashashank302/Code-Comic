@@ -9,7 +9,7 @@ import {
   sessionCookieOptions,
 } from '@/lib/auth/session'
 import { getServerEnv } from '@/lib/env'
-import { jsonNoStore } from '@/lib/http'
+import { jsonNoStore, safeExtensionRedirect, safeReturnTo } from '@/lib/http'
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
@@ -23,6 +23,15 @@ export async function GET(request: Request) {
     return jsonNoStore({ error: 'invalid_oauth_callback' }, { status: 400 })
   }
 
+  const extensionRedirect = flow.extensionRedirect
+    ? safeExtensionRedirect(
+        flow.extensionRedirect,
+        getServerEnv().ALLOWED_EXTENSION_IDS,
+      )
+    : undefined
+  if (flow.extensionRedirect && !extensionRedirect)
+    return jsonNoStore({ error: 'extension_not_allowed' }, { status: 403 })
+
   try {
     const token = await exchangeGitHubCode(code, flow.verifier)
     const user = await fetchGitHubUser(token.access_token)
@@ -34,15 +43,18 @@ export async function GET(request: Request) {
       accessToken: token.access_token,
     })
 
-    if (flow.extensionRedirect) {
-      const redirect = new URL(flow.extensionRedirect)
+    if (extensionRedirect) {
+      const redirect = new URL(extensionRedirect)
       redirect.hash = `session=${encodeURIComponent(sessionToken)}`
       return Response.redirect(redirect)
     }
 
     cookieStore.set(sessionCookieName, sessionToken, sessionCookieOptions())
     return Response.redirect(
-      new URL(flow.returnTo ?? '/', getServerEnv().NEXT_PUBLIC_APP_URL),
+      new URL(
+        safeReturnTo(flow.returnTo ?? null),
+        getServerEnv().NEXT_PUBLIC_APP_URL,
+      ),
     )
   } catch {
     return jsonNoStore(

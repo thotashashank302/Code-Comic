@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { sampleAnalysis } from '@comic-code/comic/sample'
+import { sampleAnalysis, getSampleExplanation } from '@comic-code/comic/sample'
 
 const mocks = vi.hoisted(() => ({
   session: vi.fn(),
@@ -121,6 +121,33 @@ describe('hosted image BYOK boundary', () => {
       expect(JSON.stringify(mocks.audit.mock.calls)).not.toContain(secret)
     },
   )
+
+  it('records the actual twelve-panel image count', async () => {
+    mocks.owned.mockResolvedValue({
+      ...row,
+      analysis: getSampleExplanation(12).analysis,
+    })
+    expect((await POST(request(), context)).status).toBe(200)
+    expect(mocks.audit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        metadata: expect.objectContaining({ imageCount: 12 }),
+      }),
+    )
+  })
+
+  it('cleans rejected concurrent artwork without replacing the current comic', async () => {
+    mocks.complete.mockRejectedValue(
+      Object.assign(new Error('artwork_conflict'), {
+        code: 'artwork_conflict',
+      }),
+    )
+    expect((await POST(request(), context)).status).toBe(409)
+    expect(mocks.remove).toHaveBeenCalledExactlyOnceWith(expect.anything(), [
+      'new.png',
+    ])
+    expect(mocks.fail).not.toHaveBeenCalled()
+  })
 
   it('checks ownership and current private-repository access before any provider call', async () => {
     mocks.access.mockRejectedValue({ status: 403 })

@@ -27,8 +27,17 @@ const recordSchema = z.object({
   createdAt: z.iso.datetime(),
   expiresAt: z.iso.datetime(),
   png: z.string().max(36_000_000),
+  artifactVersion: z.uuid().optional(),
 })
 export type LocalComic = z.infer<typeof recordSchema>
+type LocalComicSummary = Omit<LocalComic, 'png'>
+
+export class CorruptLocalComicError extends Error {
+  readonly code = 'local_comic_corrupt'
+  constructor() {
+    super('local_comic_corrupt')
+  }
+}
 
 export class LocalStore {
   constructor(readonly directory: string) {}
@@ -43,12 +52,16 @@ export class LocalStore {
       const record = recordSchema.parse(
         JSON.parse(await readFile(this.filename(id), 'utf8')),
       )
+      if (record.id.toLowerCase() !== id.toLowerCase())
+        throw new CorruptLocalComicError()
       if (Date.parse(record.expiresAt) <= Date.now()) {
         await this.delete(id)
         return null
       }
       return record
     } catch (error) {
+      if (error instanceof SyntaxError || error instanceof z.ZodError)
+        throw new CorruptLocalComicError()
       if (error instanceof Error && error.message === 'comic_not_found')
         return null
       if (
@@ -65,11 +78,22 @@ export class LocalStore {
   async list() {
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
     const names = await readdir(this.directory)
-    const rows: LocalComic[] = []
+    const rows: LocalComicSummary[] = []
     for (const name of names) {
       if (!/^[a-f0-9-]{36}\.json$/i.test(name)) continue
-      const row = await this.get(name.slice(0, -5))
-      if (row) rows.push(row)
+      try {
+        const row = await this.get(name.slice(0, -5))
+        if (row) {
+          // Do not retain up to 100 full base64 PNGs while listing the library.
+          const summary = { ...row, png: undefined }
+          rows.push(summary)
+        }
+      } catch (error) {
+        if (!(error instanceof CorruptLocalComicError)) throw error
+        // Preserve the original file for recovery; one damaged record must not
+        // lock the rest of the user's library or prevent new generation.
+        console.warn('Skipped corrupt local comic', { id: name.slice(0, -5) })
+      }
     }
     return rows.sort((left, right) =>
       right.createdAt.localeCompare(left.createdAt),
@@ -103,7 +127,7 @@ export function localStore() {
   )
 }
 
-export function publicLocalComic(record: LocalComic) {
+export function publicLocalComic(record: LocalComicSummary) {
   return {
     id: record.id,
     repository: record.repository,
@@ -119,7 +143,7 @@ export function publicLocalComic(record: LocalComic) {
       updatedAt: record.createdAt,
     },
     analysis: record.analysis,
-    artifactUrl: `/api/v1/explanations/${record.id}/download`,
+    artifactUrl: `/api/v1/explanations/${record.id}/download?v=${encodeURIComponent(record.artifactVersion ?? record.createdAt)}`,
     errorCode: null,
     error: null,
     createdAt: record.createdAt,

@@ -35,7 +35,7 @@ export default defineConfig({
     return {
       name: 'Comic Code',
       description:
-        'Explain how an entire GitHub repository works as a grounded four-panel comic.',
+        'Explain how an entire GitHub repository works as a grounded four- or twelve-panel comic.',
       minimum_chrome_version: '114',
       permissions: [
         'clipboardWrite',

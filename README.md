@@ -102,7 +102,9 @@ closes or you select **Clear API key**. Old saved Cloudflare credentials are
 removed automatically when the updated extension initializes.
 
 For a hosted extension, set `WXT_PUBLIC_API_BASE_URL` to the final HTTPS origin
-before building. The manifest grants access to that exact API origin.
+before building. The manifest grants access to that exact API origin. For hosted OAuth, also add
+the extension ID from `chrome://extensions` to the server’s comma-separated
+`ALLOWED_EXTENSION_IDS`. An empty list allows web login only.
 
 ## Where to enter your API key (BYOK)
 
@@ -142,7 +144,7 @@ docs/archive/        Historical implementation and hackathon documents
 
 ```bash
 pnpm check
-pnpm audit --prod
+pnpm audit
 # With the local server running, check the real public GitHub flow:
 pnpm smoke:local
 ```
@@ -159,8 +161,11 @@ GitHub Actions uses [`.github/workflows/ci.yaml`](.github/workflows/ci.yaml).
 It checks PRs when opened, updated, reopened or marked ready for review, as well
 as pushes to `main`. A manual trigger is available once the workflow is on the
 default branch. Draft PRs run checks too. The job runs `pnpm check`, extension
-packaging and the production dependency audit; it needs no AI keys or hosted
+packaging and the dependency audit for runtime and development tools; it needs no AI keys or hosted
 service credentials. CI reports results on the PR and does not merge it.
+
+See [the current functional audit](docs/FUNCTIONAL_AUDIT.md) for reproduced
+failures, fixes, cleanup decisions and current verification.
 
 See [the debugging report](docs/DEBUGGING_REPORT.md) for reproduced defects,
 fixes, test results and the limits of hosted verification.

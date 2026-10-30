@@ -6,6 +6,9 @@ assert(
   ['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname),
   'Use a local loopback server',
 )
+const panelCount = Number(process.argv[3] ?? 12)
+assert([4, 12].includes(panelCount), 'Choose four or twelve panels')
+const height = panelCount === 12 ? 3540 : 1200
 const checks = []
 async function request(route, options = {}) {
   return fetch(new URL(route, base), {
@@ -86,6 +89,7 @@ try {
       ref: repository.ref,
       commitSha: repository.commitSha,
       forceRegenerate: true,
+      panelCount,
     }),
   })
   assert.equal(created.status, 201, await created.clone().text())
@@ -93,16 +97,16 @@ try {
   disposableId = explanation.id
   assert.equal(explanation.status, 'completed')
   assert.equal(explanation.commitSha, repository.commitSha)
-  assert.equal(explanation.analysis.panels.length, 4)
+  assert.equal(explanation.analysis.panels.length, panelCount)
   checks.push('generation completes at the inspected immutable commit')
-  await check('download is a composed 1600 by 1200 PNG', async () => {
+  await check(`download is a composed 1600 by ${height} PNG`, async () => {
     const response = await request(explanation.artifactUrl)
     assert.equal(response.status, 200)
     assert.equal(response.headers.get('content-type'), 'image/png')
     const png = Buffer.from(await response.arrayBuffer())
     assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a')
     assert.equal(png.readUInt32BE(16), 1600)
-    assert.equal(png.readUInt32BE(20), 1200)
+    assert.equal(png.readUInt32BE(20), height)
   })
   await check('saved comic appears in persistent listing', async () => {
     const { explanations } = await (

@@ -8,6 +8,16 @@ const serverEnvSchema = z.object({
   GITHUB_PRIVATE_KEY_BASE64: z.string().min(1),
   GITHUB_WEBHOOK_SECRET: z.string().min(32),
   GITHUB_APP_SLUG: z.string().min(1),
+  ALLOWED_EXTENSION_IDS: z
+    .string()
+    .default('')
+    .transform((value) =>
+      value
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean),
+    )
+    .pipe(z.array(z.string().regex(/^[a-p]{32}$/))),
   NEXT_PUBLIC_SUPABASE_URL: z.url(),
   SUPABASE_SECRET_KEY: z.string().min(1),
   SHARE_TOKEN_PEPPER: z.string().min(32),

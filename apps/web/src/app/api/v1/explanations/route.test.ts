@@ -216,6 +216,7 @@ describe('captured repository generation and dispatch recovery', () => {
 
   it('recovers an interrupted row with analysis but no recorded run', async () => {
     mocks.getExisting.mockResolvedValue({
+      expires_at: new Date(Date.now() + 86400000).toISOString(),
       id: 'interrupted',
       status: 'illustrating',
       trigger_run_id: null,
@@ -230,8 +231,23 @@ describe('captured repository generation and dispatch recovery', () => {
     expect(mocks.createExplanation).not.toHaveBeenCalled()
   })
 
+  it('creates a fresh record instead of returning an expired completed comic', async () => {
+    mocks.getExisting.mockResolvedValue({
+      id: 'expired',
+      status: 'completed',
+      expires_at: '2000-01-01T00:00:00.000Z',
+    })
+    expect((await POST(request())).status).toBe(202)
+    expect(mocks.createExplanation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ idempotencyKey: 'retry-key' }),
+    )
+    expect(mocks.trigger).toHaveBeenCalled()
+  })
+
   it('reuses a successfully dispatched explanation without duplicating the job', async () => {
     mocks.getExisting.mockResolvedValue({
+      expires_at: new Date(Date.now() + 86400000).toISOString(),
       id: 'existing',
       status: 'illustrating',
       trigger_run_id: 'run',
